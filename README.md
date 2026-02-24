@@ -89,5 +89,6 @@ Prompt customization:
 - The script creates **one private playlist per ISO week** (for example `2026-W08`) when `playlist-read-private` is granted; without it, duplicate-week detection is skipped.
 - Week `W08` is grounded on playlist data from `W07` when available and readable.
 - On first run (or if `W07` is missing), it falls back to your current `short_term` listening data.
+- Playlist descriptions are automatically normalized and truncated to Spotify's limit before creation.
 - If your account has too little listening history, Spotify may return fewer recommendations.
 - Set your preferred genres directly in the prompt file/template (for example in `prompts/playlist_user_prompt.md`) so the model pulls genre guidance from prompt content.

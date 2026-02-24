@@ -1,4 +1,4 @@
-name: Weekly Spotify Playlist
+name: Build Weekly Spotify Playlist
 
 on:
   schedule:
@@ -10,7 +10,7 @@ permissions:
   models: read
 
 jobs:
-  build-playlist:
+  build-weekly-spotify-playlist:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

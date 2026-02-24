@@ -19,6 +19,7 @@ SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 GITHUB_MODELS_BASE = "https://models.inference.ai.azure.com"
 DEFAULT_USER_PROMPT_FILE = "prompts/playlist_user_prompt.md"
 DEFAULT_MODEL = "gpt-4o-mini"
+SPOTIFY_PLAYLIST_DESCRIPTION_MAX = 300
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2.0  # seconds
 
@@ -377,11 +378,28 @@ def spotify_get_discovery_tracks(
 
 
 def spotify_create_playlist(token: str, name: str, description: str) -> str:
+    normalized_description = " ".join(description.split()).strip()
+    if not normalized_description:
+        normalized_description = "Generated automatically."
+
+    if len(normalized_description) > SPOTIFY_PLAYLIST_DESCRIPTION_MAX:
+        ellipsis = "…"
+        trim_to = SPOTIFY_PLAYLIST_DESCRIPTION_MAX - len(ellipsis)
+        truncated = normalized_description[:trim_to].rstrip()
+        if " " in truncated:
+            truncated = truncated.rsplit(" ", 1)[0]
+        normalized_description = (truncated or normalized_description[:trim_to]).rstrip() + ellipsis
+        print(
+            "Description exceeded Spotify limit; truncated before playlist creation.",
+            file=sys.stderr,
+            flush=True,
+        )
+
     payload = http_json(
         "POST",
         f"{SPOTIFY_API_BASE}/me/playlists",
         headers={"Authorization": f"Bearer {token}"},
-        body={"name": name, "description": description, "public": False},
+        body={"name": name, "description": normalized_description, "public": False},
     )
     return payload["id"]
 
