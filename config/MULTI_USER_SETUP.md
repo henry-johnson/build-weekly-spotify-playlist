@@ -23,10 +23,8 @@ Each user's credentials are stored as separate GitHub repository secrets.
      **For user "henry":**
      - Name: `SPOTIFY_USER_HENRY_CLIENT_ID`
      - Value: `(henry's client ID)`
-     
      - Name: `SPOTIFY_USER_HENRY_CLIENT_SECRET`
      - Value: `(henry's client secret)`
-     
      - Name: `SPOTIFY_USER_HENRY_REFRESH_TOKEN`
      - Value: `(henry's refresh token)`
 
@@ -77,14 +75,17 @@ Generating playlist artwork with AI…
 ### Troubleshooting
 
 **Missing users or credentials warning:**
+
 - Check that all three secrets are present for each user
 - Secret names must match pattern: `SPOTIFY_USER_{USERNAME}_*`
 - Username is extracted from the secret name (uppercase part after `SPOTIFY_USER_`)
 
 **Workflow not running:**
+
 - Verify `OPENAI_API_KEY` secret exists
 - Check workflow is enabled: Settings → Actions → General
 
 **No playlists created:**
+
 - Check GitHub Actions logs for error details
 - Ensure Spotify refresh tokens are still valid

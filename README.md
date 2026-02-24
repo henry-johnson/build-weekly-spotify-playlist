@@ -115,11 +115,11 @@ Prompt customization:
 
 ### Prompts
 
-| File                                 | Placeholders                                                                                   | Used by                                     |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `prompts/playlist_description_prompt.md`    | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
-| `prompts/recommendations_prompt.md`  | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
-| `prompts/playlist_artwork_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_artwork.py` — playlist cover generation |
+| File                                     | Placeholders                                                                                   | Used by                                     |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `prompts/playlist_description_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
+| `prompts/recommendations_prompt.md`      | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
+| `prompts/playlist_artwork_prompt.md`     | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_artwork.py` — playlist cover generation |
 
 ## How the AI recommendation engine works
 
