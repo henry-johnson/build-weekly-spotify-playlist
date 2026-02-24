@@ -182,18 +182,63 @@ def spotify_get_top_tracks(token: str, limit: int = 15) -> list[dict[str, Any]]:
     return payload.get("items", [])
 
 
-def spotify_get_recommendations(
-    token: str, seed_tracks: list[str], limit: int = 30
+def spotify_get_related_artists(token: str, artist_id: str) -> list[str]:
+    try:
+        data = http_json(
+            "GET",
+            f"{SPOTIFY_API_BASE}/artists/{artist_id}/related-artists",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return [a["id"] for a in data.get("artists", [])[:3]]
+    except Exception:
+        return []
+
+
+def spotify_get_artist_top_tracks(token: str, artist_id: str) -> list[str]:
+    try:
+        data = http_json(
+            "GET",
+            f"{SPOTIFY_API_BASE}/artists/{artist_id}/top-tracks?market=GB",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return [t["uri"] for t in data.get("tracks", [])[:3]]
+    except Exception:
+        return []
+
+
+def spotify_get_discovery_tracks(
+    token: str, top_tracks: list[dict[str, Any]], limit: int = 30
 ) -> list[str]:
-    params = urllib.parse.urlencode(
-        {"seed_tracks": ",".join(seed_tracks[:5]), "limit": str(limit)}
-    )
-    payload = http_json(
-        "GET",
-        f"{SPOTIFY_API_BASE}/recommendations?{params}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    return [track["uri"] for track in payload.get("tracks", [])]
+    # Extract unique seed artist IDs from top tracks
+    seen_artists: set[str] = set()
+    seed_artist_ids: list[str] = []
+    for track in top_tracks:
+        for artist in track.get("artists", []):
+            aid = artist.get("id")
+            if aid and aid not in seen_artists:
+                seen_artists.add(aid)
+                seed_artist_ids.append(aid)
+        if len(seed_artist_ids) >= 5:
+            break
+
+    # Find related artists
+    related_ids: list[str] = []
+    for artist_id in seed_artist_ids:
+        related_ids.extend(spotify_get_related_artists(token, artist_id))
+
+    # Deduplicate, exclude seed artists
+    related_ids = list(dict.fromkeys(
+        rid for rid in related_ids if rid not in seen_artists
+    ))
+
+    # Pull top tracks from related artists
+    discovery_uris: list[str] = []
+    for artist_id in related_ids:
+        if len(discovery_uris) >= limit:
+            break
+        discovery_uris.extend(spotify_get_artist_top_tracks(token, artist_id))
+
+    return discovery_uris[:limit]
 
 
 def spotify_create_playlist(
@@ -244,11 +289,10 @@ def main() -> None:
         )
         sys.exit(1)
 
-    print("Fetching recommendations…")
-    seed_track_ids = [track["id"] for track in top_tracks if track.get("id")][:5]
-    rec_uris = spotify_get_recommendations(token, seed_track_ids, limit=recommendation_limit)
+    print("Fetching discovery tracks via related artists…")
+    rec_uris = spotify_get_discovery_tracks(token, top_tracks, limit=recommendation_limit)
     if not rec_uris:
-        print("No recommendations returned by Spotify.", file=sys.stderr)
+        print("No discovery tracks found.", file=sys.stderr)
         sys.exit(1)
 
     print("Generating playlist metadata with AI…")

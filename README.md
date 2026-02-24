@@ -12,9 +12,10 @@ Every Monday (or on manual trigger), GitHub Actions runs `scripts/create_weekly_
 
 1. Refresh your Spotify access token.
 2. Pull your top tracks (`short_term`).
-3. Request Spotify recommendations from those tracks.
-4. Ask GitHub Models for a creative playlist title + description.
-5. Create a new private playlist and add recommended tracks.
+3. Find related artists based on your top artists.
+4. Pull discovery tracks from those related artists.
+5. Ask GitHub Models for a playlist description.
+6. Create a new private playlist and add the discovery tracks.
 
 ## 1) Create a Spotify app
 
@@ -61,7 +62,7 @@ Optional repository **Variables**:
 - `GITHUB_MODEL` (default `gpt-5-mini`)
 - `GITHUB_MODEL_TEMPERATURE` (default `0.8`)
 - `SPOTIFY_TOP_TRACKS_LIMIT` (default `15`)
-- `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`)
+- `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`) — max discovery tracks to add
 
 Prompt customization:
 
