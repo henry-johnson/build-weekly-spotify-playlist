@@ -59,7 +59,7 @@ Set these repository **Secrets**:
 
 Optional repository **Variables**:
 
-- `GITHUB_MODEL` (default `gpt-5-mini`)
+- `GITHUB_MODEL` (default `gpt-4o-mini`)
 - `GITHUB_MODEL_TEMPERATURE` (default `0.8`)
 - `SPOTIFY_TOP_TRACKS_LIMIT` (default `15`)
 - `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`) — max discovery tracks to add

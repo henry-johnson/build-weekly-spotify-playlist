@@ -18,7 +18,7 @@ SPOTIFY_ACCOUNTS_BASE = "https://accounts.spotify.com"
 SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 GITHUB_MODELS_BASE = "https://models.inference.ai.azure.com"
 DEFAULT_USER_PROMPT_FILE = "prompts/playlist_user_prompt.md"
-DEFAULT_MODEL = "gpt-5-mini"
+DEFAULT_MODEL = "gpt-4o-mini"
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2.0  # seconds
 
