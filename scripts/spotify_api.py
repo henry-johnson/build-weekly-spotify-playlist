@@ -168,26 +168,6 @@ def spotify_clear_playlist(token: str, playlist_id: str) -> int:
     if total_before == 0:
         return 0
 
-    # Fast path: replace all playlist items with an empty list.
-    # Spotify historically used /tracks for this endpoint; newer docs use /items.
-    for replace_endpoint in ("tracks", "items"):
-        try:
-            http_json(
-                "PUT",
-                f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/{replace_endpoint}",
-                headers={"Authorization": f"Bearer {token}"},
-                body={"uris": []},
-            )
-            break
-        except urllib.error.HTTPError as err:
-            if err.code in (400, 403, 404, 405):
-                continue
-            raise
-
-    payload = _first_page()
-    if int(payload.get("total") or 0) == 0:
-        return total_before
-
     # Fallback path: repeatedly delete the first page by explicit positions
     # until Spotify reports the playlist is empty.
     while True:
