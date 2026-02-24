@@ -208,9 +208,9 @@ def main() -> None:
 
     # Prepend a human-readable creation timestamp
     created_at = dt.datetime.now(dt.timezone.utc).strftime(
-        "%b %d, %Y at %I:%M %p UTC",
+        "%b %d, %Y at %I:%M:%S %p UTC",
     )
-    playlist_description = f"Created: {created_at} | {playlist_description}"
+    playlist_description = f"Created: {created_at}\n{playlist_description}"
 
     # ── Create or overwrite playlist ────────────────────────────────
     playlist_name = target_week
