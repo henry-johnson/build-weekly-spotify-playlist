@@ -13,8 +13,8 @@ SPOTIFY_PLAYLIST_DESCRIPTION_MAX = 300
 
 # ── GitHub Models ───────────────────────────────────────────────────
 GITHUB_MODELS_BASE = "https://models.github.ai/inference"
-DEFAULT_MODEL = "openai/gpt-5-nano"
-DEFAULT_RECOMMENDATIONS_MODEL = "openai/gpt-5"
+DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_RECOMMENDATIONS_MODEL = "openai/gpt-4o"
 
 # ── Prompt files ────────────────────────────────────────────────────
 DEFAULT_USER_PROMPT_FILE = "prompts/playlist_user_prompt.md"
