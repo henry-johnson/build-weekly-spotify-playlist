@@ -14,6 +14,7 @@ Genres in rotation: {genres}
 Suggest {max_queries} Spotify search queries. Each query should use Spotify search syntax (supports: artist:"name", genre:"name", track:"name", album:"name", year:YYYY, year:YYYY-YYYY).
 
 Mix of:
+
 - 4-5 queries for artists SIMILAR to but DIFFERENT from my current rotation
 - 3-4 genre-adjacent or cross-genre queries
 - 2-3 queries for specific tracks or albums I'd likely enjoy

@@ -95,22 +95,22 @@ Prompt customization:
 
 ### Scripts (modular)
 
-| File | Purpose |
-|---|---|
-| `scripts/create_weekly_playlist.py` | Thin orchestrator — wires modules together and runs the end-to-end flow. |
-| `scripts/config.py` | Shared constants (API base URLs, defaults) and environment helpers. |
-| `scripts/http_client.py` | `http_json()` — stdlib HTTP client with automatic retry on 429 / 5xx. |
-| `scripts/spotify_auth.py` | Spotify OAuth token refresh and scope validation. |
-| `scripts/spotify_api.py` | All Spotify Web API helpers (profile, top items, search, playlist CRUD). |
-| `scripts/ai_metadata.py` | AI playlist description generation via GitHub Models. |
-| `scripts/ai_recommendations.py` | AI recommendation engine — sends listening data to a GPT model and gets back Spotify search queries for music discovery. |
-| `scripts/discovery.py` | Track mix builder: combines AI recommendations, familiar anchors, and genre/artist search into a ~28-track playlist. |
+| File                                | Purpose                                                                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `scripts/create_weekly_playlist.py` | Thin orchestrator — wires modules together and runs the end-to-end flow.                                                 |
+| `scripts/config.py`                 | Shared constants (API base URLs, defaults) and environment helpers.                                                      |
+| `scripts/http_client.py`            | `http_json()` — stdlib HTTP client with automatic retry on 429 / 5xx.                                                    |
+| `scripts/spotify_auth.py`           | Spotify OAuth token refresh and scope validation.                                                                        |
+| `scripts/spotify_api.py`            | All Spotify Web API helpers (profile, top items, search, playlist CRUD).                                                 |
+| `scripts/ai_metadata.py`            | AI playlist description generation via GitHub Models.                                                                    |
+| `scripts/ai_recommendations.py`     | AI recommendation engine — sends listening data to a GPT model and gets back Spotify search queries for music discovery. |
+| `scripts/discovery.py`              | Track mix builder: combines AI recommendations, familiar anchors, and genre/artist search into a ~28-track playlist.     |
 
 ### Prompts
 
-| File | Placeholders | Used by |
-|---|---|---|
-| `prompts/playlist_user_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}` | `ai_metadata.py` — playlist descriptions |
+| File                                | Placeholders                                                                                   | Used by                                     |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `prompts/playlist_user_prompt.md`   | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
 | `prompts/recommendations_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
 
 ## How the AI recommendation engine works
