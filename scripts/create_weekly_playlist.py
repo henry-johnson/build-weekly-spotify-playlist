@@ -192,9 +192,9 @@ def spotify_get_top_artists(token: str, limit: int = 10) -> list[dict[str, Any]]
     return payload.get("items", [])
 
 
-def spotify_search_tracks_by_genre(token: str, genre: str, limit: int = 10) -> list[str]:
+def spotify_search_tracks(token: str, query: str, limit: int = 10) -> list[str]:
     params = urllib.parse.urlencode({
-        "q": f"genre:{genre}",
+        "q": query,
         "type": "track",
         "limit": str(limit),
     })
@@ -204,8 +204,11 @@ def spotify_search_tracks_by_genre(token: str, genre: str, limit: int = 10) -> l
             f"{SPOTIFY_API_BASE}/search?{params}",
             headers={"Authorization": f"Bearer {token}"},
         )
-        return [t["uri"] for t in payload.get("tracks", {}).get("items", []) if t.get("uri")]
-    except Exception:
+        uris = [t["uri"] for t in payload.get("tracks", {}).get("items", []) if t.get("uri")]
+        print(f"  Search '{query}': {len(uris)} tracks", flush=True)
+        return uris
+    except Exception as exc:
+        print(f"  Search '{query}' failed: {exc}", file=sys.stderr)
         return []
 
 
@@ -215,26 +218,30 @@ def spotify_get_discovery_tracks(
     top_artists: list[dict[str, Any]],
     limit: int = 30,
 ) -> list[str]:
-    # Collect known track URIs to avoid duplicates
+    # Known track URIs to exclude
     known_uris: set[str] = {t["uri"] for t in top_tracks if t.get("uri")}
 
-    # Extract unique genres from top artists
+    # Build search queries: genres first, then artist names as fallback
     genres: list[str] = list(dict.fromkeys(
         genre
         for artist in top_artists
         for genre in artist.get("genres", [])
     ))
+    artist_names: list[str] = [a["name"] for a in top_artists if a.get("name")]
 
-    if not genres:
-        # Fall back to searching by artist name if no genres available
-        genres = [f'artist:"{a["name"]}"' for a in top_artists[:5]]
+    print(f"Genres from top artists: {genres[:10]}", flush=True)
+    print(f"Top artist names: {artist_names[:5]}", flush=True)
+
+    queries: list[str] = (
+        [f'genre:"{g}"' for g in genres[:10]] +
+        [f'artist:"{name}"' for name in artist_names[:5]]
+    )
 
     discovery_uris: list[str] = []
-    for genre in genres:
+    for query in queries:
         if len(discovery_uris) >= limit:
             break
-        tracks = spotify_search_tracks_by_genre(token, genre, limit=10)
-        for uri in tracks:
+        for uri in spotify_search_tracks(token, query, limit=10):
             if uri not in known_uris and uri not in discovery_uris:
                 discovery_uris.append(uri)
 
