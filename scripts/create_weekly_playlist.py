@@ -374,6 +374,17 @@ def spotify_get_recommendations(
         uris = [t["uri"] for t in payload.get("tracks", []) if t.get("uri")]
         print(f"  Recommendations: {len(uris)} tracks returned.", flush=True)
         return uris
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            print(
+                "  Recommendations: endpoint returned 404 — this API requires Spotify Extended Quota Mode."
+                " Skipping.",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            print(f"  Recommendations call failed ({exc.code}): {exc}", file=sys.stderr, flush=True)
+        return []
     except Exception as exc:
         print(f"  Recommendations call failed: {exc}", file=sys.stderr, flush=True)
         return []
@@ -398,6 +409,16 @@ def spotify_get_related_artists_top_tracks(
                 f"{SPOTIFY_API_BASE}/artists/{artist_id}/related-artists",
                 headers={"Authorization": f"Bearer {token}"},
             )
+        except urllib.error.HTTPError as exc:
+            if exc.code == 403:
+                print(
+                    f"  related-artists({artist_id}): 403 — requires Spotify Extended Quota Mode. Skipping all.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                break  # All artists will fail with the same 403; no point continuing
+            print(f"  related-artists({artist_id}) failed ({exc.code}): {exc}", file=sys.stderr, flush=True)
+            continue
         except Exception as exc:
             print(f"  related-artists({artist_id}) failed: {exc}", file=sys.stderr, flush=True)
             continue
@@ -471,6 +492,7 @@ def spotify_get_discovery_tracks(
         limit=15,
     ):
         add(uri, 10)
+    recs_count = len(discovered)
 
     # --- Slot 2: Related artists' top tracks — target 8 tracks ---
     top_artist_ids = [a["id"] for a in current_top_artists if a.get("id")][:5]
@@ -479,6 +501,7 @@ def spotify_get_discovery_tracks(
             token, top_artist_ids, market=market, limit=12
         ):
             add(uri, 18)
+    related_count = len(discovered) - recs_count
 
     # --- Slot 3: Familiar anchors — shuffled source tracks, target 5 ---
     anchor_uris = [t["uri"] for t in source_tracks if t.get("uri")]
@@ -487,29 +510,33 @@ def spotify_get_discovery_tracks(
         if uri not in discovered_set and len(discovered) < 23:
             discovered.append(uri)
             discovered_set.add(uri)
+    anchor_count = len(discovered) - recs_count - related_count
 
-    # --- Slot 4: Genre-adjacent search — fill to 28 ---
+    # --- Slot 4: Genre/artist search — fill to 28 ---
+    # Use current_top_artists for genres (full artist objects with genre data from /me/top/artists)
+    # Use source_artists for artist names (prominent artists in the source week's listening)
     genres = list(dict.fromkeys(
-        g for a in source_artists for g in a.get("genres", [])
+        g for a in current_top_artists for g in a.get("genres", [])
     ))
-    artist_names = [a["name"] for a in source_artists if a.get("name")]
+    artist_names = list(dict.fromkeys(
+        [a["name"] for a in source_artists if a.get("name")]
+        + [a["name"] for a in current_top_artists if a.get("name")]
+    ))
     print(f"Genre search pool: {genres[:8]}", flush=True)
     queries = (
         [f'genre:"{g}"' for g in genres[:8]]
-        + [f'artist:"{n}"' for n in artist_names[:5]]
+        + [f'artist:"{n}"' for n in artist_names[:8]]
     )
     for query in queries:
         if len(discovered) >= 28:
             break
         for uri in spotify_search_tracks(token, query, limit=10, market=market):
             add(uri, 28)
+    search_count = len(discovered) - recs_count - related_count - anchor_count
 
     print(
         f"Discovery mix: {len(discovered)} tracks "
-        f"(recs={min(10, len(discovered))}, "
-        f"related={max(0, min(8, len(discovered)-10))}, "
-        f"anchors={max(0, min(5, len(discovered)-18))}, "
-        f"search={max(0, len(discovered)-23)})",
+        f"(recs={recs_count}, related={related_count}, anchors={anchor_count}, search={search_count})",
         flush=True,
     )
     return discovered
