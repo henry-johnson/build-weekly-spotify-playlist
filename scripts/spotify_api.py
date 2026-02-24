@@ -149,45 +149,71 @@ def spotify_create_playlist(
 
 def spotify_clear_playlist(token: str, playlist_id: str) -> int:
     """Remove all tracks from a playlist. Returns the count removed."""
-    next_url: str | None = (
-        f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/items?limit=100"
-    )
-    tracks_to_remove: list[dict[str, Any]] = []
-    position = 0
-
-    while next_url:
-        payload = http_json(
+    def _first_page() -> dict[str, Any]:
+        return http_json(
             "GET",
-            next_url,
+            f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/items?limit=100",
             headers={"Authorization": f"Bearer {token}"},
         )
-        for item in payload.get("items", []):
+
+    payload = _first_page()
+    total_before = int(payload.get("total") or 0)
+    if total_before == 0:
+        return 0
+
+    # Fast path: replace all playlist items with an empty list.
+    # Spotify historically used /tracks for this endpoint; newer docs use /items.
+    for replace_endpoint in ("tracks", "items"):
+        try:
+            http_json(
+                "PUT",
+                f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/{replace_endpoint}",
+                headers={"Authorization": f"Bearer {token}"},
+                body={"uris": []},
+            )
+            break
+        except urllib.error.HTTPError as err:
+            if err.code in (400, 404, 405):
+                continue
+            raise
+
+    payload = _first_page()
+    if int(payload.get("total") or 0) == 0:
+        return total_before
+
+    # Fallback path: repeatedly delete the first page by explicit positions
+    # until Spotify reports the playlist is empty.
+    while True:
+        items = payload.get("items", [])
+        if not items:
+            break
+
+        tracks_batch: list[dict[str, Any]] = []
+        for position, item in enumerate(items):
             track = item.get("track") or {}
             uri = track.get("uri")
             if uri:
-                tracks_to_remove.append({"uri": uri, "positions": [position]})
-            position += 1
-        next_url = payload.get("next")
+                tracks_batch.append({"uri": uri, "positions": [position]})
 
-    if not tracks_to_remove:
-        return 0
+        if not tracks_batch:
+            break
 
-    snapshot_id: str | None = None
-    for i in range(0, len(tracks_to_remove), 100):
-        batch = tracks_to_remove[i : i + 100]
-        body: dict[str, Any] = {"tracks": batch}
-        if snapshot_id:
-            body["snapshot_id"] = snapshot_id
-
-        result = http_json(
+        http_json(
             "DELETE",
             f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/tracks",
             headers={"Authorization": f"Bearer {token}"},
-            body=body,
+            body={"tracks": tracks_batch},
         )
-        snapshot_id = result.get("snapshot_id") or snapshot_id
+        payload = _first_page()
 
-    return len(tracks_to_remove)
+    remaining = int(payload.get("total") or 0)
+    if remaining > 0:
+        raise RuntimeError(
+            f"Could not fully clear playlist {playlist_id}; "
+            f"{remaining} items remain.",
+        )
+
+    return total_before
 
 
 def spotify_update_playlist_details(
