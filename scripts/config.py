@@ -24,7 +24,7 @@ OPENAI_IMAGE_QUALITY = "auto"  # "low", "medium", "high", "auto"
 # gpt-5-nano: only supports temperature=1 (no custom values)
 # gpt-5.2: supports 0.0-2.0
 OPENAI_TEMPERATURE_SMALL = 1.0  # gpt-5-nano default
-OPENAI_TEMPERATURE_LARGE = 0.7  # gpt-5.2 balanced
+OPENAI_TEMPERATURE_LARGE = 0.8  # gpt-5.2 balanced
 
 # ── Prompt files ────────────────────────────────────────────────────
 DEFAULT_USER_PROMPT_FILE = "prompts/playlist_description_prompt.md"
