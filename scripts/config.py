@@ -12,9 +12,9 @@ SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 SPOTIFY_PLAYLIST_DESCRIPTION_MAX = 300
 
 # ── GitHub Models ───────────────────────────────────────────────────
-GITHUB_MODELS_BASE = "https://models.inference.ai.azure.com"
-DEFAULT_MODEL = "gpt-4o-mini"
-DEFAULT_RECOMMENDATIONS_MODEL = "gpt-4o"
+GITHUB_MODELS_BASE = "https://models.github.ai/inference"
+DEFAULT_MODEL = "openai/gpt-5-nano"
+DEFAULT_RECOMMENDATIONS_MODEL = "openai/gpt-5"
 
 # ── Prompt files ────────────────────────────────────────────────────
 DEFAULT_USER_PROMPT_FILE = "prompts/playlist_user_prompt.md"

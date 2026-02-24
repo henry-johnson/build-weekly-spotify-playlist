@@ -68,9 +68,9 @@ Set these repository **Secrets**:
 
 Optional repository **Variables**:
 
-- `GITHUB_MODEL` (default `gpt-4o-mini`) — model used for playlist descriptions
+- `GITHUB_MODEL` (default `gpt-5-nano`) — model used for playlist descriptions
 - `GITHUB_MODEL_TEMPERATURE` (default `0.8`) — temperature for description generation
-- `GITHUB_RECOMMENDATIONS_MODEL` (default `gpt-4o`) — model used for the AI recommendation engine (try `gpt-5` if you have access)
+- `GITHUB_RECOMMENDATIONS_MODEL` (default `gpt-5`) — model used for the AI recommendation engine
 - `GITHUB_RECOMMENDATIONS_TEMPERATURE` (default `1.0`) — temperature for recommendation generation (higher = more creative)
 - `SPOTIFY_TOP_TRACKS_LIMIT` (default `15`)
 - `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`) — max tracks fetched from a previous week playlist when grounding source data
@@ -118,7 +118,7 @@ Prompt customization:
 `scripts/ai_recommendations.py` replaces Spotify’s restricted `/v1/recommendations` endpoint (which requires Extended Quota Mode) with a custom GPT-powered alternative:
 
 1. **Profile assembly** — Your top tracks (with artist attribution), top artists (with Spotify genre tags), and aggregated genres are formatted into a rich prompt.
-2. **LLM query generation** — The profile is sent to GitHub Models (default model: `gpt-4o`, configurable) with a system prompt instructing it to act as a music discovery engine. It returns up to 15 Spotify search queries designed for discovery:
+2. **LLM query generation** — The profile is sent to GitHub Models (default model: `gpt-5`, configurable) with a system prompt instructing it to act as a music discovery engine. It returns up to 15 Spotify search queries designed for discovery:
    - 4–5 queries for artists **similar to but different from** your current rotation
    - 3–4 genre-adjacent or cross-genre queries
    - 2–3 specific tracks or albums you’d likely enjoy
