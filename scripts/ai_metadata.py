@@ -75,27 +75,52 @@ def generate_playlist_description(
         target_week=target_week,
     )
 
-    response = http_json(
-        "POST",
-        f"{GITHUB_MODELS_BASE}/chat/completions",
-        headers={"Authorization": f"Bearer {gh_token}"},
-        body={
-            "model": model_name,
-            "temperature": temperature,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        },
-    )
-
-    raw_content = response["choices"][0]["message"]["content"]
-
     try:
-        parsed = json.loads(raw_content)
-    except json.JSONDecodeError as exc:
-        print(f"Model returned invalid JSON: {raw_content!r}", file=sys.stderr)
-        raise ValueError("Model response was not valid JSON.") from exc
+        response = http_json(
+            "POST",
+            f"{GITHUB_MODELS_BASE}/chat/completions",
+            headers={"Authorization": f"Bearer {gh_token}"},
+            body={
+                "model": model_name,
+                "temperature": temperature,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            },
+        )
 
-    return str(parsed.get("description", "")).strip() or "Generated automatically."
+        raw_content = response["choices"][0]["message"]["content"]
+
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError:
+            print(f"Model returned invalid JSON: {raw_content!r}", file=sys.stderr)
+            parsed = {}
+
+        description = str(parsed.get("description", "")).strip()
+        if description:
+            return description
+    except Exception as exc:
+        print(
+            f"  Description AI failed ({exc}); using fallback.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    # Fallback description when AI is unavailable or returns garbage
+    fallback_artists = ", ".join(
+        list(
+            dict.fromkeys(
+                artist["name"]
+                for track in top_tracks[:5]
+                for artist in track.get("artists", [])
+                if artist.get("name")
+            )
+        )[:5]
+    )
+    return (
+        f"Weekly playlist for {target_week}, based on {source_week} listening"
+        f"{': ' + fallback_artists if fallback_artists else ''}."
+    )
