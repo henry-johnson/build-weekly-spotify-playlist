@@ -23,6 +23,7 @@ Every Monday (or on manual trigger), GitHub Actions runs `scripts/create_weekly_
    - Falls back entirely to basic genre/artist search if the AI engine is unavailable
 7. Ask GitHub Models for a grounded playlist description.
 8. Create (or overwrite) the target week private playlist and add the discovery mix.
+9. Optionally generate AI playlist artwork and upload it to Spotify.
 
 ## 1) Create a Spotify app
 
@@ -38,6 +39,8 @@ Every Monday (or on manual trigger), GitHub Actions runs `scripts/create_weekly_
 Required scopes: `user-top-read playlist-modify-private playlist-modify-public`.
 
 **Strongly recommended scope: `playlist-read-private`.** Without it, the script cannot detect an existing week playlist and will create a duplicate every run instead of overwriting.
+
+**Optional scope: `ugc-image-upload`.** Required only if you want automatic playlist cover artwork upload.
 
 Example authorization URL:
 
@@ -74,11 +77,14 @@ Optional repository **Variables**:
 - `GITHUB_RECOMMENDATIONS_TEMPERATURE` (default `1.0`) — temperature for recommendation generation (higher = more creative)
 - `SPOTIFY_TOP_TRACKS_LIMIT` (default `15`)
 - `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`) — max tracks fetched from a previous week playlist when grounding source data
+- `ENABLE_PLAYLIST_ARTWORK` (default `1`) — set to `0` to disable AI artwork generation/upload
+- `GITHUB_ARTWORK_MODEL` (default `openai/gpt-image-1`) — model used for artwork generation
 
 Prompt customization:
 
 - Edit `prompts/playlist_user_prompt.md` to customize playlist descriptions. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`.
 - Edit `prompts/recommendations_prompt.md` to customize the AI discovery strategy. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}`.
+- Edit `prompts/playlist_artwork_prompt.md` to customize artwork generation. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`.
 
 > The workflow uses `secrets.GITHUB_TOKEN` and requests `models: read` permission for GitHub Models.
 
@@ -104,6 +110,7 @@ Prompt customization:
 | `scripts/spotify_api.py`            | All Spotify Web API helpers (profile, top items, search, playlist CRUD).                                                 |
 | `scripts/ai_metadata.py`            | AI playlist description generation via GitHub Models.                                                                    |
 | `scripts/ai_recommendations.py`     | AI recommendation engine — sends listening data to a GPT model and gets back Spotify search queries for music discovery. |
+| `scripts/ai_artwork.py`             | AI playlist artwork generation and payload validation for Spotify upload.                                                 |
 | `scripts/discovery.py`              | Track mix builder: combines AI recommendations, familiar anchors, and genre/artist search into a ~28-track playlist.     |
 
 ### Prompts
@@ -112,6 +119,7 @@ Prompt customization:
 | ----------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `prompts/playlist_user_prompt.md`   | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
 | `prompts/recommendations_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
+| `prompts/playlist_artwork_prompt.md`| `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_artwork.py` — playlist cover generation |
 
 ## How the AI recommendation engine works
 

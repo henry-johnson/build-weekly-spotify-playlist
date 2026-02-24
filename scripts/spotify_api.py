@@ -6,6 +6,7 @@ import datetime as dt
 import sys
 import urllib.error
 import urllib.parse
+import urllib.request
 from typing import Any
 
 from config import SPOTIFY_API_BASE, SPOTIFY_PLAYLIST_DESCRIPTION_MAX
@@ -168,8 +169,25 @@ def spotify_clear_playlist(token: str, playlist_id: str) -> int:
     if total_before == 0:
         return 0
 
+    # Fast path: replace all playlist items with an empty list.
+    # This handles edge cases where playlist items cannot be removed by URI.
+    try:
+        http_json(
+            "PUT",
+            f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/items",
+            headers={"Authorization": f"Bearer {token}"},
+            body={"uris": []},
+        )
+        payload = _first_page()
+        if int(payload.get("total") or 0) == 0:
+            return total_before
+    except urllib.error.HTTPError as err:
+        if err.code not in (400, 403, 404, 405):
+            raise
+
     # Fallback path: repeatedly delete the first page by explicit positions
     # until Spotify reports the playlist is empty.
+    saw_unremovable_items = False
     while True:
         items = payload.get("items", [])
         if not items:
@@ -183,6 +201,7 @@ def spotify_clear_playlist(token: str, playlist_id: str) -> int:
                 tracks_batch.append({"uri": uri, "positions": [position]})
 
         if not tracks_batch:
+            saw_unremovable_items = True
             break
 
         http_json(
@@ -194,6 +213,22 @@ def spotify_clear_playlist(token: str, playlist_id: str) -> int:
         payload = _first_page()
 
     remaining = int(payload.get("total") or 0)
+    if remaining > 0 and saw_unremovable_items:
+        # One more clear attempt after URI-based removals. This can clear
+        # pages containing unavailable tracks with no URI payload.
+        try:
+            http_json(
+                "PUT",
+                f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/items",
+                headers={"Authorization": f"Bearer {token}"},
+                body={"uris": []},
+            )
+            payload = _first_page()
+            remaining = int(payload.get("total") or 0)
+        except urllib.error.HTTPError as err:
+            if err.code not in (400, 403, 404, 405):
+                raise
+
     if remaining > 0:
         raise RuntimeError(
             f"Could not fully clear playlist {playlist_id}; "
@@ -217,6 +252,37 @@ def spotify_update_playlist_details(
             "public": False,
         },
     )
+
+
+def spotify_upload_playlist_cover_image(
+    token: str,
+    playlist_id: str,
+    image_base64_jpeg: str,
+) -> None:
+    """Upload a custom cover image for a playlist.
+
+    `image_base64_jpeg` must be a base64-encoded JPEG payload.
+    """
+    request = urllib.request.Request(
+        f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/images",
+        data=image_base64_jpeg.encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "image/jpeg",
+        },
+        method="PUT",
+    )
+    try:
+        with urllib.request.urlopen(request):
+            return
+    except urllib.error.HTTPError as err:
+        details = err.read().decode("utf-8", errors="replace")
+        print(
+            f"HTTP error {err.code} for PUT "
+            f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/images: {details}",
+            file=sys.stderr,
+        )
+        raise
 
 
 def spotify_add_tracks(

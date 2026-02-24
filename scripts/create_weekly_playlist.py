@@ -10,7 +10,13 @@ import os
 import sys
 import urllib.error
 
-from config import DEFAULT_MODEL, DEFAULT_RECOMMENDATIONS_MODEL, require_env
+from config import (
+    DEFAULT_ARTWORK_MODEL,
+    DEFAULT_MODEL,
+    DEFAULT_RECOMMENDATIONS_MODEL,
+    require_env,
+)
+from ai_artwork import generate_playlist_artwork_base64
 from spotify_auth import spotify_access_token
 from spotify_api import (
     artists_from_tracks,
@@ -23,6 +29,7 @@ from spotify_api import (
     spotify_get_playlist_tracks,
     spotify_get_top_artists,
     spotify_get_top_tracks,
+    spotify_upload_playlist_cover_image,
     spotify_update_playlist_details,
 )
 from ai_metadata import generate_playlist_description
@@ -40,10 +47,17 @@ def main() -> None:
     recommendations_model = os.getenv(
         "GITHUB_RECOMMENDATIONS_MODEL", DEFAULT_RECOMMENDATIONS_MODEL,
     )
+    artwork_model = os.getenv("GITHUB_ARTWORK_MODEL", DEFAULT_ARTWORK_MODEL)
     model_temperature = float(os.getenv("GITHUB_MODEL_TEMPERATURE", "0.8"))
     recommendations_temperature = float(
         os.getenv("GITHUB_RECOMMENDATIONS_TEMPERATURE", "1.0"),
     )
+    artwork_enabled = os.getenv("ENABLE_PLAYLIST_ARTWORK", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
     top_tracks_limit = int(os.getenv("SPOTIFY_TOP_TRACKS_LIMIT", "15"))
     recommendation_limit = int(os.getenv("SPOTIFY_RECOMMENDATIONS_LIMIT", "30"))
 
@@ -72,6 +86,11 @@ def main() -> None:
     print(f"Source week: {source_week}", flush=True)
     print(f"Description model: {model_name}", flush=True)
     print(f"Recommendations model: {recommendations_model}", flush=True)
+    print(
+        f"Artwork: {'enabled' if artwork_enabled else 'disabled'}"
+        f" (model: {artwork_model})",
+        flush=True,
+    )
 
     # ── Check for existing playlist ─────────────────────────────────
     can_read_private = "playlist-read-private" in granted_scopes
@@ -285,6 +304,54 @@ def main() -> None:
             flush=True,
         )
         sys.exit(1)
+
+    # ── Generate/upload playlist artwork (optional) ────────────────
+    if artwork_enabled:
+        if "ugc-image-upload" not in granted_scopes:
+            print(
+                "Skipping artwork upload "
+                "(missing optional scope: ugc-image-upload).",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            print("Generating playlist artwork with AI…", flush=True)
+            artwork_b64 = generate_playlist_artwork_base64(
+                github_token,
+                artwork_model,
+                source_tracks,
+                source_artists,
+                source_week=source_week,
+                target_week=target_week,
+            )
+            if artwork_b64:
+                try:
+                    spotify_upload_playlist_cover_image(
+                        token,
+                        playlist_id,
+                        artwork_b64,
+                    )
+                    print("  Uploaded custom playlist artwork.", flush=True)
+                except urllib.error.HTTPError as err:
+                    if err.code == 403:
+                        print(
+                            "  Artwork upload forbidden (403). "
+                            "Check ownership and ugc-image-upload scope.",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            f"  Artwork upload failed ({err}).",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+            else:
+                print(
+                    "  Artwork generation skipped or failed.",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
     print(f"\n✓ Created playlist: {playlist_name}", flush=True)
     print(f"  Added tracks: {added_count}/{len(rec_uris)}", flush=True)

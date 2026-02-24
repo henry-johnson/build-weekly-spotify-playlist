@@ -13,7 +13,7 @@ REQUIRED_SCOPES = {
     "playlist-modify-private",
     "playlist-modify-public",
 }
-OPTIONAL_SCOPES = {"playlist-read-private"}
+OPTIONAL_SCOPES = {"playlist-read-private", "ugc-image-upload"}
 
 
 def spotify_access_token(
@@ -53,7 +53,8 @@ def spotify_access_token(
         print(
             "Optional scope(s) missing: "
             f"{', '.join(sorted(missing_optional))}. "
-            "Weekly dedupe and previous-playlist grounding will be disabled.",
+            "Some optional features (weekly dedupe, previous-playlist grounding, "
+            "or artwork upload) will be disabled.",
             file=sys.stderr,
             flush=True,
         )
