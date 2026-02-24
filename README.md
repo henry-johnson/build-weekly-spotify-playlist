@@ -82,7 +82,7 @@ Optional repository **Variables**:
 
 Prompt customization:
 
-- Edit `prompts/playlist_user_prompt.md` to customize playlist descriptions. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`.
+- Edit `prompts/playlist_description_prompt.md` to customize playlist descriptions. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`.
 - Edit `prompts/recommendations_prompt.md` to customize the AI discovery strategy. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}`.
 - Edit `prompts/playlist_artwork_prompt.md` to customize artwork generation. Placeholders: `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`.
 
@@ -117,7 +117,7 @@ Prompt customization:
 
 | File                                 | Placeholders                                                                                   | Used by                                     |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `prompts/playlist_user_prompt.md`    | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
+| `prompts/playlist_description_prompt.md`    | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
 | `prompts/recommendations_prompt.md`  | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
 | `prompts/playlist_artwork_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_artwork.py` — playlist cover generation |
 
@@ -145,5 +145,5 @@ Prompt customization:
 - Week `W08` is grounded on playlist data from `W07` when available. On first run (or if `W07` is missing), it falls back to your current `short_term` listening data.
 - Playlist descriptions are automatically normalized and truncated to Spotify’s 300-character limit.
 - If your account has too little listening history (fewer than 5 top tracks), the script exits early.
-- Edit `prompts/playlist_user_prompt.md` to customize playlist descriptions, or `prompts/recommendations_prompt.md` to customize the AI discovery strategy.
+- Edit `prompts/playlist_description_prompt.md` to customize playlist descriptions, or `prompts/recommendations_prompt.md` to customize the AI discovery strategy.
 - Zero pip dependencies — everything uses Python 3.12 stdlib only (plus GitHub Models for AI).

@@ -1,4 +1,4 @@
-"""Create a weekly Spotify playlist using GitHub Models + Spotify API.
+"""Create a weekly Spotify playlist using OpenAI + Spotify API.
 
 Orchestrator script — delegates to modular components in the same directory.
 """
@@ -12,14 +12,15 @@ import sys
 import urllib.error
 from collections import deque
 
+from model_provider_openai import OpenAIProvider
 from config import (
-    DEFAULT_ARTWORK_MODEL,
-    DEFAULT_MODEL,
-    DEFAULT_RECOMMENDATIONS_MODEL,
+    OPENAI_API_BASE_URL,
+    OPENAI_TEXT_MODEL_SMALL,
     SPOTIFY_PLAYLIST_DESCRIPTION_MAX,
     require_env,
 )
-from ai_artwork import generate_playlist_artwork_base64
+from multi_user_config import load_users_from_env
+from artwork import generate_playlist_artwork_base64
 from spotify_auth import spotify_access_token
 from spotify_api import (
     artists_from_tracks,
@@ -36,7 +37,7 @@ from spotify_api import (
     spotify_upload_playlist_cover_image,
     spotify_update_playlist_details,
 )
-from ai_metadata import generate_playlist_description
+from metadata import generate_playlist_description
 from discovery import build_discovery_mix
 
 
@@ -83,31 +84,24 @@ def _spread_tracks_by_artist(
     return ordered
 
 
-def main() -> None:
-    # ── Environment ─────────────────────────────────────────────────
-    spotify_client_id = require_env("SPOTIFY_CLIENT_ID")
-    spotify_client_secret = require_env("SPOTIFY_CLIENT_SECRET")
-    spotify_refresh_token = require_env("SPOTIFY_REFRESH_TOKEN")
-    github_token = require_env("GITHUB_TOKEN")
-
-    model_name = os.getenv("GITHUB_MODEL", DEFAULT_MODEL)
-    recommendations_model = os.getenv(
-        "GITHUB_RECOMMENDATIONS_MODEL", DEFAULT_RECOMMENDATIONS_MODEL,
-    )
-    artwork_model = os.getenv("GITHUB_ARTWORK_MODEL", DEFAULT_ARTWORK_MODEL)
-    model_temperature = float(os.getenv("GITHUB_MODEL_TEMPERATURE", "0.8"))
-    recommendations_temperature = float(
-        os.getenv("GITHUB_RECOMMENDATIONS_TEMPERATURE", "1.0"),
-    )
-    artwork_enabled = os.getenv("ENABLE_PLAYLIST_ARTWORK", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
-    top_tracks_limit = int(os.getenv("SPOTIFY_TOP_TRACKS_LIMIT", "15"))
-    recommendation_limit = int(os.getenv("SPOTIFY_RECOMMENDATIONS_LIMIT", "30"))
-
+def create_playlist_for_user(
+    username: str,
+    spotify_client_id: str,
+    spotify_client_secret: str,
+    spotify_refresh_token: str,
+    provider: OpenAIProvider,
+    *,
+    model_temperature: float = 0.7,
+    recommendations_temperature: float = 1.0,
+    artwork_enabled: bool = True,
+    top_tracks_limit: int = 15,
+    recommendation_limit: int = 30,
+) -> None:
+    """Create a weekly playlist for a single user."""
+    print(f"\n{'='*60}", flush=True)
+    print(f"Creating playlist for: {username}", flush=True)
+    print(f"{'='*60}", flush=True)
+    
     # ── Authenticate ────────────────────────────────────────────────
     print("Authenticating with Spotify…", flush=True)
     token, granted_scopes = spotify_access_token(
@@ -259,18 +253,26 @@ def main() -> None:
 
     # ── Build discovery mix ─────────────────────────────────────────
     print("Building discovery track mix…", flush=True)
-    rec_uris = build_discovery_mix(
-        spotify_token=token,
-        gh_token=github_token,
-        recommendations_model=recommendations_model,
-        source_tracks=source_tracks,
-        source_artists=source_artists,
-        current_top_artists=current_top_artists,
-        source_week=source_week,
-        target_week=target_week,
-        market=search_market,
-        temperature=recommendations_temperature,
-    )
+    try:
+        rec_uris = build_discovery_mix(
+            spotify_token=token,
+            provider=provider,
+            source_tracks=source_tracks,
+            source_artists=source_artists,
+            current_top_artists=current_top_artists,
+            source_week=source_week,
+            target_week=target_week,
+            market=search_market,
+            temperature=recommendations_temperature,
+        )
+    except Exception as err:
+        print(
+            f"⚠ Discovery mix failed (rate limit?): {err}",
+            file=sys.stderr,
+            flush=True,
+        )
+        rec_uris = []
+    
     if not rec_uris:
         print(
             f"No discovery tracks from {source_label}; "
@@ -286,8 +288,7 @@ def main() -> None:
     # ── Generate playlist description ───────────────────────────────
     print("Generating playlist description with AI…", flush=True)
     playlist_description = generate_playlist_description(
-        github_token,
-        model_name,
+        provider,
         source_tracks,
         model_temperature,
         source_week=source_week,
@@ -398,39 +399,52 @@ def main() -> None:
             )
         else:
             print("Generating playlist artwork with AI…", flush=True)
-            artwork_b64 = generate_playlist_artwork_base64(
-                github_token,
-                artwork_model,
-                source_tracks,
-                source_artists,
-                source_week=source_week,
-                target_week=target_week,
-            )
-            if artwork_b64:
-                try:
-                    spotify_upload_playlist_cover_image(
-                        token,
-                        playlist_id,
-                        artwork_b64,
+            try:
+                artwork_b64 = generate_playlist_artwork_base64(
+                    provider,
+                    source_tracks,
+                    source_artists,
+                    source_week=source_week,
+                    target_week=target_week,
+                )
+                if artwork_b64:
+                    try:
+                        spotify_upload_playlist_cover_image(
+                            token,
+                            playlist_id,
+                            artwork_b64,
+                        )
+                        print("  Uploaded custom playlist artwork.", flush=True)
+                    except urllib.error.HTTPError as err:
+                        if err.code == 403:
+                            print(
+                                "  Artwork upload forbidden (403). "
+                                "Check ownership and ugc-image-upload scope.",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                        elif err.code == 429:
+                            print(
+                                "  Artwork upload rate limited (429). "
+                                "Skipping for now.",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                f"  Artwork upload failed ({err}).",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                else:
+                    print(
+                        "  Artwork generation skipped or failed.",
+                        file=sys.stderr,
+                        flush=True,
                     )
-                    print("  Uploaded custom playlist artwork.", flush=True)
-                except urllib.error.HTTPError as err:
-                    if err.code == 403:
-                        print(
-                            "  Artwork upload forbidden (403). "
-                            "Check ownership and ugc-image-upload scope.",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                    else:
-                        print(
-                            f"  Artwork upload failed ({err}).",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-            else:
+            except Exception as err:
                 print(
-                    "  Artwork generation skipped or failed.",
+                    f"  ⚠ Artwork generation failed (rate limit?): {err}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -441,6 +455,68 @@ def main() -> None:
         f"  https://open.spotify.com/playlist/{playlist_id}",
         flush=True,
     )
+
+
+def main() -> None:
+    """Main entry point: load OpenAI config and run for all users."""
+    # ── Global config ───────────────────────────────────────────────
+    openai_api_key = require_env("OPENAI_API_KEY")
+    
+    model_temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+    recommendations_temperature = float(os.getenv("OPENAI_RECOMMENDATIONS_TEMPERATURE", "1.0"))
+    artwork_enabled = os.getenv("ENABLE_PLAYLIST_ARTWORK", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+    top_tracks_limit = int(os.getenv("SPOTIFY_TOP_TRACKS_LIMIT", "15"))
+    recommendation_limit = int(os.getenv("SPOTIFY_RECOMMENDATIONS_LIMIT", "30"))
+
+    # ── Initialize OpenAI Provider ──────────────────────────────────
+    provider = OpenAIProvider(api_key=openai_api_key, base_url=OPENAI_API_BASE_URL)
+    
+    # ── Load users from environment ─────────────────────────────────
+    users = load_users_from_env()
+    
+    if not users:
+        print(
+            "No users found. Set SPOTIFY_USER_* environment variables.",
+            file=sys.stderr,
+            flush=True,
+        )
+        sys.exit(1)
+    
+    print(f"Found {len(users)} user(s): {', '.join(u.username for u in users)}")
+    print()
+    
+    # ── Create playlists for each user ──────────────────────────────
+    for user in users:
+        try:
+            create_playlist_for_user(
+                username=user.username,
+                spotify_client_id=user.spotify_client_id,
+                spotify_client_secret=user.spotify_client_secret,
+                spotify_refresh_token=user.spotify_refresh_token,
+                provider=provider,
+                model_temperature=model_temperature,
+                recommendations_temperature=recommendations_temperature,
+                artwork_enabled=artwork_enabled,
+                top_tracks_limit=top_tracks_limit,
+                recommendation_limit=recommendation_limit,
+            )
+        except Exception as exc:
+            print(
+                f"❌ Playlist creation failed for {user.username}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    print(f"\n{'='*60}")
+    print("✓ Playlist creation complete for all users")
 
 
 if __name__ == "__main__":

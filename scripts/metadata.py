@@ -1,4 +1,4 @@
-"""AI-powered playlist description generation via GitHub Models."""
+"""AI-powered playlist description generation."""
 
 from __future__ import annotations
 
@@ -7,8 +7,13 @@ import os
 import sys
 from typing import Any
 
-from config import DEFAULT_USER_PROMPT_FILE, GITHUB_MODELS_BASE, read_file_if_exists
-from http_client import http_json
+from model_provider import AIProvider
+from config import (
+    DEFAULT_USER_PROMPT_FILE,
+    OPENAI_TEXT_MODEL_SMALL,
+    OPENAI_TEMPERATURE_SMALL,
+    read_file_if_exists,
+)
 
 
 def _build_description_prompts(
@@ -62,8 +67,7 @@ def _build_description_prompts(
 
 
 def generate_playlist_description(
-    gh_token: str,
-    model_name: str,
+    provider: AIProvider,
     top_tracks: list[dict[str, Any]],
     temperature: float,
     *,
@@ -71,7 +75,7 @@ def generate_playlist_description(
     target_week: str,
     listener_first_name: str,
 ) -> str:
-    """Generate a playlist description using an AI model.
+    """Generate a playlist description using an AI provider.
 
     Returns the description string.
     """
@@ -83,19 +87,11 @@ def generate_playlist_description(
     )
 
     try:
-        response = http_json(
-            "POST",
-            f"{GITHUB_MODELS_BASE}/chat/completions",
-            headers={"Authorization": f"Bearer {gh_token}"},
-            body={
-                "model": model_name,
-                "temperature": temperature,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            },
+        response = provider.generate_text(
+            system_prompt,
+            user_prompt,
+            model=OPENAI_TEXT_MODEL_SMALL,
+            temperature=OPENAI_TEMPERATURE_SMALL,
         )
 
         raw_content = response["choices"][0]["message"]["content"]

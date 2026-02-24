@@ -12,21 +12,29 @@ SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 SPOTIFY_PLAYLIST_DESCRIPTION_MAX = 300
 SPOTIFY_PLAYLIST_IMAGE_MAX_BYTES = 256 * 1024
 
-# ── GitHub Models ───────────────────────────────────────────────────
-GITHUB_MODELS_BASE = "https://models.github.ai/inference"
-DEFAULT_MODEL = "openai/gpt-4o-mini"
-DEFAULT_RECOMMENDATIONS_MODEL = "openai/gpt-4o"
-DEFAULT_ARTWORK_MODEL = "openai/gpt-image-1"
+# ── OpenAI API ──────────────────────────────────────────────────
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+OPENAI_TEXT_MODEL_SMALL = "gpt-5-nano"  # For lightweight tasks (description)
+OPENAI_TEXT_MODEL_LARGE = "gpt-5.2"  # For complex tasks (recommendations)
+OPENAI_IMAGE_MODEL = "chatgpt-image-latest"
+OPENAI_IMAGE_SIZE = "1024"  # Size in pixels (will be formatted as 1024x1024)
+OPENAI_IMAGE_QUALITY = "auto"  # "low", "medium", "high", "auto"
+
+# Temperature settings per model
+# gpt-5-nano: only supports temperature=1 (no custom values)
+# gpt-5.2: supports 0.0-2.0
+OPENAI_TEMPERATURE_SMALL = 1.0  # gpt-5-nano default
+OPENAI_TEMPERATURE_LARGE = 0.7  # gpt-5.2 balanced
 
 # ── Prompt files ────────────────────────────────────────────────────
-DEFAULT_USER_PROMPT_FILE = "prompts/playlist_user_prompt.md"
+DEFAULT_USER_PROMPT_FILE = "prompts/playlist_description_prompt.md"
 DEFAULT_RECOMMENDATIONS_PROMPT_FILE = "prompts/recommendations_prompt.md"
 DEFAULT_ARTWORK_PROMPT_FILE = "prompts/playlist_artwork_prompt.md"
 
 # ── Retry config ────────────────────────────────────────────────────
-MAX_RETRIES = 5
+MAX_RETRIES = 10  # Increased for rate limit tolerance
 RETRY_BACKOFF = 2.0  # seconds
-MAX_RETRY_WAIT_SECONDS = 30.0
+MAX_RETRY_WAIT_SECONDS = 120.0  # Increased to handle heavy rate limiting
 
 
 def require_env(name: str) -> str:

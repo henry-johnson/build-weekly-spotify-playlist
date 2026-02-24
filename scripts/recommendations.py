@@ -1,4 +1,4 @@
-"""AI-powered music recommendation engine via GitHub Models.
+"""AI-powered music recommendation engine.
 
 Uses a large language model to generate intelligent Spotify search queries
 based on the user's listening data, replacing Spotify's restricted
@@ -12,12 +12,13 @@ import os
 import sys
 from typing import Any
 
+from model_provider import AIProvider
 from config import (
     DEFAULT_RECOMMENDATIONS_PROMPT_FILE,
-    GITHUB_MODELS_BASE,
+    OPENAI_TEXT_MODEL_LARGE,
+    OPENAI_TEMPERATURE_LARGE,
     read_file_if_exists,
 )
-from http_client import http_json
 
 
 def _default_prompt_template() -> str:
@@ -102,8 +103,7 @@ def _build_recommendation_prompt(
 
 
 def ai_recommend_search_queries(
-    gh_token: str,
-    model_name: str,
+    provider: AIProvider,
     top_tracks: list[dict[str, Any]],
     top_artists: list[dict[str, Any]],
     *,
@@ -112,7 +112,7 @@ def ai_recommend_search_queries(
     temperature: float = 1.0,
     max_queries: int = 15,
 ) -> list[str]:
-    """Use an AI model to generate Spotify search queries for music discovery.
+    """Use an AI provider to generate Spotify search queries for music discovery.
 
     Returns a list of search query strings, or an empty list on failure.
     """
@@ -124,22 +124,14 @@ def ai_recommend_search_queries(
         max_queries=max_queries,
     )
 
-    print(f"  AI recommendations: calling {model_name}…", flush=True)
+    print(f"  AI recommendations: calling {OPENAI_TEXT_MODEL_LARGE}…", flush=True)
 
     try:
-        response = http_json(
-            "POST",
-            f"{GITHUB_MODELS_BASE}/chat/completions",
-            headers={"Authorization": f"Bearer {gh_token}"},
-            body={
-                "model": model_name,
-                "temperature": temperature,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            },
+        response = provider.generate_text(
+            system_prompt,
+            user_prompt,
+            model=OPENAI_TEXT_MODEL_LARGE,
+            temperature=OPENAI_TEMPERATURE_LARGE,
         )
     except Exception as exc:
         print(
