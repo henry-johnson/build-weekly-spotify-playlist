@@ -83,6 +83,9 @@ def http_json(
     raise RuntimeError(f"All {retries} retries exhausted for {method} {url}")
 
 
+REQUIRED_SCOPES = {"user-top-read", "playlist-modify-private"}
+
+
 def spotify_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:
     basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     response = http_json(
@@ -91,6 +94,22 @@ def spotify_access_token(client_id: str, client_secret: str, refresh_token: str)
         headers={"Authorization": f"Basic {basic}"},
         form={"grant_type": "refresh_token", "refresh_token": refresh_token},
     )
+
+    granted = set(response.get("scope", "").split())
+    print(f"Granted scopes: {granted}", flush=True)
+    missing = REQUIRED_SCOPES - granted
+    if missing:
+        print(
+            f"ERROR: Token is missing required scope(s): {', '.join(sorted(missing))}\n"
+            f"Re-authorise with scopes: {' '.join(sorted(REQUIRED_SCOPES))}\n"
+            f"  https://accounts.spotify.com/authorize?response_type=code"
+            f"&client_id={client_id}"
+            f"&scope={'%20'.join(sorted(REQUIRED_SCOPES))}"
+            f"&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     return response["access_token"]
 
 
@@ -282,12 +301,12 @@ def main() -> None:
     top_tracks_limit = int(os.getenv("SPOTIFY_TOP_TRACKS_LIMIT", "15"))
     recommendation_limit = int(os.getenv("SPOTIFY_RECOMMENDATIONS_LIMIT", "30"))
 
-    print("Authenticating with Spotify…")
+    print("Authenticating with Spotify…", flush=True)
     token = spotify_access_token(spotify_client_id, spotify_client_secret, spotify_refresh_token)
     me = spotify_get_me(token)
     user_id: str = me["id"]
 
-    print("Fetching top tracks and artists…")
+    print("Fetching top tracks and artists…", flush=True)
     top_tracks = spotify_get_top_tracks(token, limit=top_tracks_limit)
     top_artists = spotify_get_top_artists(token, limit=10)
     if len(top_tracks) < 5:
@@ -297,13 +316,13 @@ def main() -> None:
         )
         sys.exit(1)
 
-    print("Fetching discovery tracks via genre search…")
+    print("Fetching discovery tracks via genre search…", flush=True)
     rec_uris = spotify_get_discovery_tracks(token, top_tracks, top_artists, limit=recommendation_limit)
     if not rec_uris:
         print("No discovery tracks found.", file=sys.stderr)
         sys.exit(1)
 
-    print("Generating playlist metadata with AI…")
+    print("Generating playlist metadata with AI…", flush=True)
     playlist_meta = model_playlist_metadata(
         github_token,
         model_name,
@@ -315,12 +334,24 @@ def main() -> None:
     playlist_name = f"{week.year}-W{week.week:02d}"
     playlist_description = playlist_meta["description"]
 
-    print("Creating playlist…")
-    playlist_id = spotify_create_playlist(token, user_id, playlist_name, playlist_description)
+    print("Creating playlist…", flush=True)
+    try:
+        playlist_id = spotify_create_playlist(token, user_id, playlist_name, playlist_description)
+    except urllib.error.HTTPError as err:
+        if err.code == 403:
+            print(
+                "\nPlaylist creation returned 403 Forbidden.\n"
+                "This usually means the refresh token is missing the "
+                "'playlist-modify-private' scope.\n"
+                "Re-run the OAuth flow with the correct scopes and update "
+                "the SPOTIFY_REFRESH_TOKEN secret.",
+                file=sys.stderr,
+            )
+        raise
     spotify_add_tracks(token, playlist_id, rec_uris)
 
-    print(f"\n✓ Created playlist: {playlist_name}")
-    print(f"  https://open.spotify.com/playlist/{playlist_id}")
+    print(f"\n✓ Created playlist: {playlist_name}", flush=True)
+    print(f"  https://open.spotify.com/playlist/{playlist_id}", flush=True)
 
 
 if __name__ == "__main__":
