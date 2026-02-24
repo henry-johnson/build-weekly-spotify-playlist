@@ -211,12 +211,21 @@ def spotify_get_top_artists(token: str, limit: int = 10) -> list[dict[str, Any]]
     return payload.get("items", [])
 
 
-def spotify_search_tracks(token: str, query: str, limit: int = 10) -> list[str]:
-    params = urllib.parse.urlencode({
+def spotify_search_tracks(
+    token: str,
+    query: str,
+    limit: int = 10,
+    market: str | None = None,
+) -> list[str]:
+    query_params = {
         "q": query,
         "type": "track",
         "limit": str(limit),
-    })
+    }
+    if market:
+        query_params["market"] = market
+
+    params = urllib.parse.urlencode(query_params)
     try:
         payload = http_json(
             "GET",
@@ -235,6 +244,7 @@ def spotify_get_discovery_tracks(
     token: str,
     top_tracks: list[dict[str, Any]],
     top_artists: list[dict[str, Any]],
+    market: str | None = None,
     limit: int = 30,
 ) -> list[str]:
     # Known track URIs to exclude
@@ -260,7 +270,7 @@ def spotify_get_discovery_tracks(
     for query in queries:
         if len(discovery_uris) >= limit:
             break
-        for uri in spotify_search_tracks(token, query, limit=10):
+        for uri in spotify_search_tracks(token, query, limit=10, market=market):
             if uri not in known_uris and uri not in discovery_uris:
                 discovery_uris.append(uri)
 
@@ -277,15 +287,44 @@ def spotify_create_playlist(token: str, name: str, description: str) -> str:
     return payload["id"]
 
 
-def spotify_add_tracks(token: str, playlist_id: str, uris: list[str]) -> None:
+def spotify_add_tracks(token: str, playlist_id: str, uris: list[str]) -> int:
     # Spotify allows a maximum of 100 tracks per request
+    added_count = 0
     for i in range(0, len(uris), 100):
-        http_json(
-            "POST",
-            f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/tracks",
-            headers={"Authorization": f"Bearer {token}"},
-            body={"uris": uris[i : i + 100]},
-        )
+        batch = uris[i : i + 100]
+        try:
+            http_json(
+                "POST",
+                f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/tracks",
+                headers={"Authorization": f"Bearer {token}"},
+                body={"uris": batch},
+            )
+            added_count += len(batch)
+        except urllib.error.HTTPError as err:
+            if err.code != 403:
+                raise
+
+            print(
+                f"Batch add returned 403. Retrying one-by-one for {len(batch)} tracks…",
+                file=sys.stderr,
+                flush=True,
+            )
+            for uri in batch:
+                try:
+                    http_json(
+                        "POST",
+                        f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/tracks",
+                        headers={"Authorization": f"Bearer {token}"},
+                        body={"uris": [uri]},
+                    )
+                    added_count += 1
+                except urllib.error.HTTPError as single_err:
+                    if single_err.code == 403:
+                        print(f"Skipping forbidden track URI: {uri}", file=sys.stderr, flush=True)
+                        continue
+                    raise
+
+    return added_count
 
 
 def main() -> None:
@@ -303,7 +342,9 @@ def main() -> None:
     token = spotify_access_token(spotify_client_id, spotify_client_secret, spotify_refresh_token)
     me = spotify_get_me(token)
     user_id: str = me["id"]
+    user_country = str(me.get("country", "")).strip().upper() or None
     print(f"Authenticated as user: {user_id} ({me.get('display_name', 'N/A')})", flush=True)
+    print(f"User market: {user_country or 'N/A'}", flush=True)
 
     print("Fetching top tracks and artists…", flush=True)
     top_tracks = spotify_get_top_tracks(token, limit=top_tracks_limit)
@@ -316,7 +357,13 @@ def main() -> None:
         sys.exit(1)
 
     print("Fetching discovery tracks via genre search…", flush=True)
-    rec_uris = spotify_get_discovery_tracks(token, top_tracks, top_artists, limit=recommendation_limit)
+    rec_uris = spotify_get_discovery_tracks(
+        token,
+        top_tracks,
+        top_artists,
+        market=user_country,
+        limit=recommendation_limit,
+    )
     if not rec_uris:
         print("No discovery tracks found.", file=sys.stderr)
         sys.exit(1)
@@ -348,9 +395,13 @@ def main() -> None:
                 file=sys.stderr,
             )
         raise
-    spotify_add_tracks(token, playlist_id, rec_uris)
+    added_count = spotify_add_tracks(token, playlist_id, rec_uris)
+    if added_count == 0:
+        print("No tracks could be added to the playlist.", file=sys.stderr, flush=True)
+        sys.exit(1)
 
     print(f"\n✓ Created playlist: {playlist_name}", flush=True)
+    print(f"  Added tracks: {added_count}/{len(rec_uris)}", flush=True)
     print(f"  https://open.spotify.com/playlist/{playlist_id}", flush=True)
 
 
