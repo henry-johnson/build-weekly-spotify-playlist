@@ -110,16 +110,16 @@ Prompt customization:
 | `scripts/spotify_api.py`            | All Spotify Web API helpers (profile, top items, search, playlist CRUD).                                                 |
 | `scripts/ai_metadata.py`            | AI playlist description generation via GitHub Models.                                                                    |
 | `scripts/ai_recommendations.py`     | AI recommendation engine — sends listening data to a GPT model and gets back Spotify search queries for music discovery. |
-| `scripts/ai_artwork.py`             | AI playlist artwork generation and payload validation for Spotify upload.                                                 |
+| `scripts/ai_artwork.py`             | AI playlist artwork generation and payload validation for Spotify upload.                                                |
 | `scripts/discovery.py`              | Track mix builder: combines AI recommendations, familiar anchors, and genre/artist search into a ~28-track playlist.     |
 
 ### Prompts
 
-| File                                | Placeholders                                                                                   | Used by                                     |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `prompts/playlist_user_prompt.md`   | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
-| `prompts/recommendations_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
-| `prompts/playlist_artwork_prompt.md`| `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_artwork.py` — playlist cover generation |
+| File                                 | Placeholders                                                                                   | Used by                                     |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `prompts/playlist_user_prompt.md`    | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_metadata.py` — playlist descriptions    |
+| `prompts/recommendations_prompt.md`  | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `ai_recommendations.py` — discovery queries |
+| `prompts/playlist_artwork_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `ai_artwork.py` — playlist cover generation |
 
 ## How the AI recommendation engine works
 
