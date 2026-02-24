@@ -16,6 +16,7 @@ from config import (
     DEFAULT_ARTWORK_MODEL,
     DEFAULT_MODEL,
     DEFAULT_RECOMMENDATIONS_MODEL,
+    SPOTIFY_PLAYLIST_DESCRIPTION_MAX,
     require_env,
 )
 from ai_artwork import generate_playlist_artwork_base64
@@ -298,7 +299,22 @@ def main() -> None:
     created_at = dt.datetime.now(dt.timezone.utc).isoformat(
         timespec="seconds",
     )
-    playlist_description = f"Created: {created_at} \u2014 {playlist_description}"
+    credits_prefix = (
+        "An AI experiment by Johnsons Technologies. "
+        f"Playlist created at {created_at}. "
+    )
+    description_body = " ".join(playlist_description.split()).strip()
+    available = SPOTIFY_PLAYLIST_DESCRIPTION_MAX - len(credits_prefix)
+
+    if available <= 0:
+        playlist_description = credits_prefix[:SPOTIFY_PLAYLIST_DESCRIPTION_MAX]
+    else:
+        if len(description_body) > available:
+            if available > 1:
+                description_body = f"{description_body[: available - 1].rstrip()}…"
+            else:
+                description_body = description_body[:available]
+        playlist_description = f"{credits_prefix}{description_body}"
 
     # ── Create or overwrite playlist ────────────────────────────────
     playlist_name = target_week
