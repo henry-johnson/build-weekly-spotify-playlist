@@ -206,11 +206,11 @@ def main() -> None:
         target_week=target_week,
     )
 
-    # Append a human-readable creation timestamp
+    # Prepend a human-readable creation timestamp
     created_at = dt.datetime.now(dt.timezone.utc).strftime(
         "%b %d, %Y at %I:%M %p UTC",
     )
-    playlist_description = f"{playlist_description} | Created: {created_at}"
+    playlist_description = f"Created: {created_at} | {playlist_description}"
 
     # ── Create or overwrite playlist ────────────────────────────────
     playlist_name = target_week
@@ -245,7 +245,14 @@ def main() -> None:
                 )
             raise
 
-    # ── Add tracks ──────────────────────────────────────────────────
+    # ── Add tracks (final dedupe) ────────────────────────────────────
+    seen: set[str] = set()
+    unique_uris: list[str] = []
+    for uri in rec_uris:
+        if uri not in seen:
+            seen.add(uri)
+            unique_uris.append(uri)
+    rec_uris = unique_uris
     added_count = spotify_add_tracks(token, playlist_id, rec_uris)
     if added_count == 0:
         print(

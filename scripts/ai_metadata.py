@@ -22,6 +22,7 @@ def _build_description_prompts(
         "You are a music curator writing weekly playlist descriptions. "
         "When given a user's recent listening data, you respond only with a valid JSON object "
         'containing exactly one key: "description" (one short paragraph, no emojis). '
+        "The description MUST be 200 characters or fewer — Spotify enforces a hard limit. "
         "Do not include markdown, code fences, or any other text."
     )
 

@@ -114,22 +114,15 @@ def spotify_get_playlist_tracks(
 
 
 def _normalize_description(description: str) -> str:
-    """Normalize and truncate a playlist description to Spotify's limit."""
+    """Normalize a playlist description. Warns if over Spotify's limit."""
     normalized = " ".join(description.split()).strip()
     if not normalized:
         return "Generated automatically."
 
     if len(normalized) > SPOTIFY_PLAYLIST_DESCRIPTION_MAX:
-        ellipsis = "\u2026"
-        trim_to = SPOTIFY_PLAYLIST_DESCRIPTION_MAX - len(ellipsis)
-        truncated = normalized[:trim_to].rstrip()
-        if " " in truncated:
-            truncated = truncated.rsplit(" ", 1)[0]
-        normalized = (
-            (truncated or normalized[:trim_to]).rstrip() + ellipsis
-        )
         print(
-            "Description exceeded Spotify limit; truncated.",
+            f"Warning: description is {len(normalized)} chars "
+            f"(Spotify limit is {SPOTIFY_PLAYLIST_DESCRIPTION_MAX}).",
             file=sys.stderr,
             flush=True,
         )
@@ -200,6 +193,7 @@ def spotify_update_playlist_details(
         body={
             "name": name,
             "description": _normalize_description(description),
+            "public": False,
         },
     )
 

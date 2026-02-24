@@ -23,16 +23,16 @@ def build_discovery_mix(
     market: str | None = None,
     temperature: float = 1.0,
 ) -> list[str]:
-    """Build a ~28-track discovery mix.
+    """Build a ~100-track discovery mix.
 
-    Slot 1 — AI-recommended tracks (target 15):
+    Slot 1 — AI-recommended tracks (target 50):
         Ask a GPT model to suggest Spotify search queries based on
         listening data, then execute those queries against Spotify search.
 
-    Slot 2 — Familiar anchors (up to 5):
+    Slot 2 — Familiar anchors (up to 15):
         Shuffled source week tracks the listener already knows.
 
-    Slot 3 — Genre/artist search fallback (fill to 28):
+    Slot 3 — Genre/artist search fallback (fill to 100):
         Traditional genre and artist name searches to fill remaining slots.
     """
     known_uris: set[str] = {t["uri"] for t in source_tracks if t.get("uri")}
@@ -60,23 +60,25 @@ def build_discovery_mix(
         source_week=source_week,
         target_week=target_week,
         temperature=temperature,
-        max_queries=15,
+        max_queries=30,
     )
     for query in ai_queries:
-        if len(discovered) >= 15:
+        if len(discovered) >= 50:
             break
         for uri in spotify_search_tracks(
-            spotify_token, query, limit=5, market=market,
+            spotify_token, query, limit=10, market=market,
         ):
-            add(uri, 15)
+            add(uri, 50)
     ai_count = len(discovered)
 
     # ── Slot 2: Familiar anchors ────────────────────────────────────
     print("  Slot 2: Familiar anchors…", flush=True)
-    anchor_uris = [t["uri"] for t in source_tracks if t.get("uri")]
+    anchor_uris = list(dict.fromkeys(
+        t["uri"] for t in source_tracks if t.get("uri")
+    ))
     random.shuffle(anchor_uris)
     for uri in anchor_uris:
-        if uri not in discovered_set and len(discovered) < 20:
+        if uri not in discovered_set and len(discovered) < 65:
             discovered.append(uri)
             discovered_set.add(uri)
     anchor_count = len(discovered) - ai_count
@@ -99,12 +101,12 @@ def build_discovery_mix(
         f'artist:"{n}"' for n in artist_names[:8]
     ]
     for query in queries:
-        if len(discovered) >= 28:
+        if len(discovered) >= 100:
             break
         for uri in spotify_search_tracks(
             spotify_token, query, limit=10, market=market,
         ):
-            add(uri, 28)
+            add(uri, 100)
     search_count = len(discovered) - ai_count - anchor_count
 
     print(
