@@ -12,12 +12,16 @@ Every Monday (or on manual trigger), GitHub Actions runs `scripts/create_weekly_
 
 1. Refresh your Spotify access token.
 2. Build the target playlist week name (for example `2026-W08`).
-3. If `playlist-read-private` is granted, skip creation when that week already exists.
+3. If `playlist-read-private` is granted, check whether that week's playlist already exists — if it does, **overwrite it** (clear tracks and update metadata) rather than creating a new one.
 4. If `playlist-read-private` is granted, load source data from the previous week playlist (for example `2026-W07`).
 5. Fall back to your `short_term` top tracks/artists when previous week playlist data is unavailable.
-6. Search Spotify for discovery tracks by genre/artist.
+6. Build a discovery track mix using:
+   - **Spotify Recommendations API** (`GET /v1/recommendations`) seeded from your top tracks and artists — target 10 tracks
+   - **Related artists' top tracks** (`GET /v1/artists/{id}/related-artists` + `GET /v1/artists/{id}/top-tracks`) — target 8 tracks
+   - **Familiar anchors** — shuffled source week tracks — target 5 tracks
+   - **Genre/artist search** (`GET /v1/search`) to fill any remaining slots — target 5 tracks
 7. Ask GitHub Models for a grounded playlist description.
-8. Create the target week private playlist and add tracks.
+8. Create (or overwrite) the target week private playlist and add the discovery mix.
 
 ## 1) Create a Spotify app
 
@@ -66,7 +70,7 @@ Optional repository **Variables**:
 - `GITHUB_MODEL` (default `gpt-4o-mini`)
 - `GITHUB_MODEL_TEMPERATURE` (default `0.8`)
 - `SPOTIFY_TOP_TRACKS_LIMIT` (default `15`)
-- `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`) — max discovery tracks to add
+- `SPOTIFY_RECOMMENDATIONS_LIMIT` (default `30`) — max tracks fetched from a previous week playlist when grounding source data
 
 Prompt customization:
 
@@ -87,9 +91,9 @@ Prompt customization:
 
 ## Notes
 
-- The script creates **one private playlist per ISO week** (for example `2026-W08`) when `playlist-read-private` is granted; without it, duplicate-week detection is skipped.
-- Week `W08` is grounded on playlist data from `W07` when available and readable.
-- On first run (or if `W07` is missing), it falls back to your current `short_term` listening data.
+- The script creates **one private playlist per ISO week** (for example `2026-W08`) when `playlist-read-private` is granted. If that playlist already exists, the script **overwrites it** — it clears all existing tracks, updates the description with freshly generated AI copy, then repopulates with a new discovery mix. Without `playlist-read-private`, overwrite detection is skipped and a new playlist is created each run.
+- The discovery mix targets ~28 tracks per week: 10 from the Spotify Recommendations API (seeded from your top tracks + artists), 8 from related artists' top tracks, 5 familiar anchors from the source week, and ~5 from genre/artist search to fill remaining slots.
+- Week `W08` is grounded on playlist data from `W07` when available and readable. On first run (or if `W07` is missing), it falls back to your current `short_term` listening data.
 - Playlist descriptions are automatically normalized and truncated to Spotify's limit before creation.
-- If your account has too little listening history, Spotify may return fewer recommendations.
-- Set your preferred genres directly in the prompt file/template (for example in `prompts/playlist_user_prompt.md`) so the model pulls genre guidance from prompt content.
+- If your account has too little listening history (fewer than 5 top tracks), the script exits early.
+- Set your preferred genres or tone directly in `prompts/playlist_user_prompt.md` — the prompt supports placeholders `{source_week}`, `{target_week}`, `{top_artists}`, and `{top_tracks}`.

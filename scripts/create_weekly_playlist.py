@@ -6,6 +6,7 @@ import base64
 import datetime as dt
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -305,7 +306,7 @@ def artists_from_tracks(tracks: list[dict[str, Any]], limit: int = 10) -> list[d
                 continue
             counts[name] = counts.get(name, 0) + 1
             if name not in artist_payload:
-                artist_payload[name] = {"name": name, "genres": []}
+                artist_payload[name] = {"name": name, "genres": [], "id": artist.get("id")}
 
     ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     return [artist_payload[name] for name, _ in ordered[:limit]]
@@ -340,41 +341,178 @@ def spotify_search_tracks(
         return []
 
 
+def spotify_get_recommendations(
+    token: str,
+    seed_track_ids: list[str],
+    seed_artist_ids: list[str],
+    market: str | None = None,
+    limit: int = 50,
+) -> list[str]:
+    """Call GET /v1/recommendations and return a list of track URIs."""
+    total_seeds = len(seed_track_ids) + len(seed_artist_ids)
+    if total_seeds == 0:
+        print("  Recommendations: no seeds available, skipping.", file=sys.stderr, flush=True)
+        return []
+    if total_seeds > 5:
+        # Trim to stay within Spotify's 5-seed limit
+        seed_artist_ids = seed_artist_ids[: max(0, 5 - len(seed_track_ids))]
+
+    query_params: dict[str, str] = {"limit": str(min(limit, 100))}
+    if seed_track_ids:
+        query_params["seed_tracks"] = ",".join(seed_track_ids)
+    if seed_artist_ids:
+        query_params["seed_artists"] = ",".join(seed_artist_ids)
+    if market:
+        query_params["market"] = market
+
+    try:
+        payload = http_json(
+            "GET",
+            f"{SPOTIFY_API_BASE}/recommendations?{urllib.parse.urlencode(query_params)}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        uris = [t["uri"] for t in payload.get("tracks", []) if t.get("uri")]
+        print(f"  Recommendations: {len(uris)} tracks returned.", flush=True)
+        return uris
+    except Exception as exc:
+        print(f"  Recommendations call failed: {exc}", file=sys.stderr, flush=True)
+        return []
+
+
+def spotify_get_related_artists_top_tracks(
+    token: str,
+    artist_ids: list[str],
+    market: str | None = None,
+    limit: int = 12,
+) -> list[str]:
+    """For each artist ID, fetch related artists then get their top tracks."""
+    uris: list[str] = []
+    seen_artist_ids: set[str] = set(artist_ids)
+
+    for artist_id in artist_ids:
+        if len(uris) >= limit:
+            break
+        try:
+            related_payload = http_json(
+                "GET",
+                f"{SPOTIFY_API_BASE}/artists/{artist_id}/related-artists",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        except Exception as exc:
+            print(f"  related-artists({artist_id}) failed: {exc}", file=sys.stderr, flush=True)
+            continue
+
+        related = [
+            a for a in related_payload.get("artists", [])
+            if a.get("id") and a["id"] not in seen_artist_ids
+        ][:3]
+
+        for related_artist in related:
+            if len(uris) >= limit:
+                break
+            rid = related_artist["id"]
+            seen_artist_ids.add(rid)
+            top_params = urllib.parse.urlencode({"market": market} if market else {})
+            top_url = f"{SPOTIFY_API_BASE}/artists/{rid}/top-tracks" + (f"?{top_params}" if top_params else "")
+            try:
+                top_payload = http_json(
+                    "GET",
+                    top_url,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                for track in top_payload.get("tracks", [])[:5]:
+                    uri = track.get("uri")
+                    if uri and uri not in uris:
+                        uris.append(uri)
+            except Exception as exc:
+                print(f"  top-tracks({rid}) failed: {exc}", file=sys.stderr, flush=True)
+
+    print(f"  Related artists: {len(uris)} tracks found.", flush=True)
+    return uris[:limit]
+
+
 def spotify_get_discovery_tracks(
     token: str,
-    top_tracks: list[dict[str, Any]],
-    top_artists: list[dict[str, Any]],
+    source_tracks: list[dict[str, Any]],
+    source_artists: list[dict[str, Any]],
+    current_top_artists: list[dict[str, Any]],
     market: str | None = None,
-    limit: int = 30,
 ) -> list[str]:
-    # Known track URIs to exclude
-    known_uris: set[str] = {t["uri"] for t in top_tracks if t.get("uri")}
+    """Build a discovery track mix: recommendations, related artists, anchors, genre search."""
+    known_uris: set[str] = {t["uri"] for t in source_tracks if t.get("uri")}
+    discovered: list[str] = []
+    discovered_set: set[str] = set()
 
-    # Build search queries: genres first, then artist names as fallback
-    genres: list[str] = list(dict.fromkeys(
-        genre
-        for artist in top_artists
-        for genre in artist.get("genres", [])
-    ))
-    artist_names: list[str] = [a["name"] for a in top_artists if a.get("name")]
+    def add(uri: str, cap: int) -> bool:
+        if uri not in known_uris and uri not in discovered_set and len(discovered) < cap:
+            discovered.append(uri)
+            discovered_set.add(uri)
+            return True
+        return False
 
-    print(f"Genres from top artists: {genres[:10]}", flush=True)
-    print(f"Top artist names: {artist_names[:5]}", flush=True)
-
-    queries: list[str] = (
-        [f'genre:"{g}"' for g in genres[:10]] +
-        [f'artist:"{name}"' for name in artist_names[:5]]
+    # --- Slot 1: Spotify Recommendations API — target 10 tracks ---
+    seed_track_ids = [
+        t["uri"].split(":")[-1]
+        for t in source_tracks[:3]
+        if t.get("uri", "").startswith("spotify:track:")
+    ]
+    seed_artist_ids = [a["id"] for a in current_top_artists if a.get("id")]
+    n_tracks = min(3, len(seed_track_ids))
+    n_artists = min(5 - n_tracks, len(seed_artist_ids))
+    print(
+        f"Recommendations seeds: {n_tracks} track(s), {n_artists} artist(s)",
+        flush=True,
     )
+    for uri in spotify_get_recommendations(
+        token,
+        seed_track_ids[:n_tracks],
+        seed_artist_ids[:n_artists],
+        market=market,
+        limit=15,
+    ):
+        add(uri, 10)
 
-    discovery_uris: list[str] = []
+    # --- Slot 2: Related artists' top tracks — target 8 tracks ---
+    top_artist_ids = [a["id"] for a in current_top_artists if a.get("id")][:5]
+    if top_artist_ids:
+        for uri in spotify_get_related_artists_top_tracks(
+            token, top_artist_ids, market=market, limit=12
+        ):
+            add(uri, 18)
+
+    # --- Slot 3: Familiar anchors — shuffled source tracks, target 5 ---
+    anchor_uris = [t["uri"] for t in source_tracks if t.get("uri")]
+    random.shuffle(anchor_uris)
+    for uri in anchor_uris:
+        if uri not in discovered_set and len(discovered) < 23:
+            discovered.append(uri)
+            discovered_set.add(uri)
+
+    # --- Slot 4: Genre-adjacent search — fill to 28 ---
+    genres = list(dict.fromkeys(
+        g for a in source_artists for g in a.get("genres", [])
+    ))
+    artist_names = [a["name"] for a in source_artists if a.get("name")]
+    print(f"Genre search pool: {genres[:8]}", flush=True)
+    queries = (
+        [f'genre:"{g}"' for g in genres[:8]]
+        + [f'artist:"{n}"' for n in artist_names[:5]]
+    )
     for query in queries:
-        if len(discovery_uris) >= limit:
+        if len(discovered) >= 28:
             break
         for uri in spotify_search_tracks(token, query, limit=10, market=market):
-            if uri not in known_uris and uri not in discovery_uris:
-                discovery_uris.append(uri)
+            add(uri, 28)
 
-    return discovery_uris[:limit]
+    print(
+        f"Discovery mix: {len(discovered)} tracks "
+        f"(recs={min(10, len(discovered))}, "
+        f"related={max(0, min(8, len(discovered)-10))}, "
+        f"anchors={max(0, min(5, len(discovered)-18))}, "
+        f"search={max(0, len(discovered)-23)})",
+        flush=True,
+    )
+    return discovered
 
 
 def spotify_create_playlist(token: str, name: str, description: str) -> str:
@@ -402,6 +540,66 @@ def spotify_create_playlist(token: str, name: str, description: str) -> str:
         body={"name": name, "description": normalized_description, "public": False},
     )
     return payload["id"]
+
+
+def spotify_clear_playlist(token: str, playlist_id: str) -> int:
+    """Remove all tracks from a playlist. Returns the number of tracks removed."""
+    next_url: str | None = f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/items?limit=100"
+    all_uris: list[str] = []
+
+    while next_url:
+        payload = http_json(
+            "GET",
+            next_url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        for item in payload.get("items", []):
+            track = item.get("track") or {}
+            uri = track.get("uri")
+            if uri:
+                all_uris.append(uri)
+        next_url = payload.get("next")
+
+    if not all_uris:
+        return 0
+
+    for i in range(0, len(all_uris), 100):
+        batch = all_uris[i : i + 100]
+        http_json(
+            "DELETE",
+            f"{SPOTIFY_API_BASE}/playlists/{playlist_id}/tracks",
+            headers={"Authorization": f"Bearer {token}"},
+            body={"tracks": [{"uri": uri} for uri in batch]},
+        )
+
+    return len(all_uris)
+
+
+def spotify_update_playlist_details(token: str, playlist_id: str, name: str, description: str) -> None:
+    """Update the name and description of an existing playlist."""
+    normalized_description = " ".join(description.split()).strip()
+    if not normalized_description:
+        normalized_description = "Generated automatically."
+
+    if len(normalized_description) > SPOTIFY_PLAYLIST_DESCRIPTION_MAX:
+        ellipsis = "\u2026"
+        trim_to = SPOTIFY_PLAYLIST_DESCRIPTION_MAX - len(ellipsis)
+        truncated = normalized_description[:trim_to].rstrip()
+        if " " in truncated:
+            truncated = truncated.rsplit(" ", 1)[0]
+        normalized_description = (truncated or normalized_description[:trim_to]).rstrip() + ellipsis
+        print(
+            "Description exceeded Spotify limit; truncated before playlist update.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    http_json(
+        "PUT",
+        f"{SPOTIFY_API_BASE}/playlists/{playlist_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        body={"name": name, "description": normalized_description},
+    )
 
 
 def spotify_add_tracks(token: str, playlist_id: str, uris: list[str]) -> int:
@@ -490,6 +688,7 @@ def main() -> None:
 
     can_read_private_playlists = "playlist-read-private" in granted_scopes
 
+    existing_playlist_id: str | None = None
     if can_read_private_playlists:
         try:
             existing_target = spotify_find_playlist_by_name(token, target_week)
@@ -505,11 +704,11 @@ def main() -> None:
             else:
                 raise
         if existing_target:
+            existing_playlist_id = str(existing_target.get("id") or "")
             print(
-                f"Playlist {target_week} already exists ({existing_target.get('id')}). Skipping.",
+                f"Playlist {target_week} already exists ({existing_playlist_id}). Will overwrite.",
                 flush=True,
             )
-            return
     else:
         print(
             "Skipping existing-playlist check (missing playlist-read-private scope).",
@@ -572,13 +771,13 @@ def main() -> None:
         flush=True,
     )
 
-    print("Fetching discovery tracks via genre search…", flush=True)
+    print("Building discovery track mix (recommendations, related artists, genre search)…", flush=True)
     rec_uris = spotify_get_discovery_tracks(
         token,
         source_tracks,
         source_artists,
+        current_top_artists,
         market=search_market,
-        limit=recommendation_limit,
     )
     if not rec_uris:
         print(
@@ -602,21 +801,28 @@ def main() -> None:
     playlist_name = target_week
     playlist_description = playlist_meta["description"]
 
-    print("Creating playlist…", flush=True)
-    try:
-        playlist_id = spotify_create_playlist(token, playlist_name, playlist_description)
-    except urllib.error.HTTPError as err:
-        if err.code == 403:
-            print(
-                "\nPlaylist creation returned 403 Forbidden.\n"
-                "Possible causes:\n"
-                "  1. Add your Spotify account email to the app's User Management\n"
-                "     at https://developer.spotify.com/dashboard (Settings → User Management)\n"
-                "  2. Re-authorise with all required scopes and update the\n"
-                "     SPOTIFY_REFRESH_TOKEN secret.",
-                file=sys.stderr,
-            )
-        raise
+    if existing_playlist_id:
+        print("Overwriting existing playlist…", flush=True)
+        removed = spotify_clear_playlist(token, existing_playlist_id)
+        print(f"  Removed {removed} existing tracks.", flush=True)
+        spotify_update_playlist_details(token, existing_playlist_id, playlist_name, playlist_description)
+        playlist_id = existing_playlist_id
+    else:
+        print("Creating playlist…", flush=True)
+        try:
+            playlist_id = spotify_create_playlist(token, playlist_name, playlist_description)
+        except urllib.error.HTTPError as err:
+            if err.code == 403:
+                print(
+                    "\nPlaylist creation returned 403 Forbidden.\n"
+                    "Possible causes:\n"
+                    "  1. Add your Spotify account email to the app's User Management\n"
+                    "     at https://developer.spotify.com/dashboard (Settings → User Management)\n"
+                    "  2. Re-authorise with all required scopes and update the\n"
+                    "     SPOTIFY_REFRESH_TOKEN secret.",
+                    file=sys.stderr,
+                )
+            raise
     added_count = spotify_add_tracks(token, playlist_id, rec_uris)
     if added_count == 0:
         print(
