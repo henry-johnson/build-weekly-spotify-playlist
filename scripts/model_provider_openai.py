@@ -85,9 +85,7 @@ class OpenAIProvider(AIProvider):
                 "prompt": prompt,
                 "size": size_str,
                 "quality": quality,
-                "response_format": "b64_json",
                 "n": 1,
             },
         )
-        # If response_format was requested, images endpoint doesn't use it; just return as-is
         return response

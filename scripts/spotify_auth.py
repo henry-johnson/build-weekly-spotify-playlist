@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import sys
 
 from config import SPOTIFY_ACCOUNTS_BASE
 from http_client import http_json
@@ -38,15 +37,14 @@ def spotify_access_token(
     print(f"Granted scopes: {granted}", flush=True)
     missing = REQUIRED_SCOPES - granted
     if missing:
-        print(
-            f"ERROR: Token is missing required scope(s): {', '.join(sorted(missing))}\n"
+        msg = (
+            f"Token is missing required scope(s): {', '.join(sorted(missing))}\n"
             f"Re-authorise with scopes: {' '.join(sorted(REQUIRED_SCOPES))}\n"
             f"  https://accounts.spotify.com/authorize?response_type=code"
             f"&client_id={client_id}"
             f"&scope={'%20'.join(sorted(REQUIRED_SCOPES))}"
-            f"&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback",
-            file=sys.stderr,
+            f"&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback"
         )
-        sys.exit(1)
+        raise RuntimeError(msg)
 
     return response["access_token"], granted
