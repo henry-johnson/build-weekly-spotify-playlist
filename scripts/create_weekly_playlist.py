@@ -388,6 +388,7 @@ def create_playlist_for_user(
                     source_artists,
                     source_week=source_week,
                     target_week=target_week,
+                    playlist_name=playlist_name,
                 )
                 if artwork_b64:
                     try:
