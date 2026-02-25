@@ -63,6 +63,6 @@ Before finalising each query, internally evaluate:
 Reject and replace any query that fails.
 
 Return strict JSON with a single key:
-{
+{{
 "queries": ["query1", "query2", ...]
-}
+}}

@@ -24,7 +24,6 @@ def build_discovery_mix(
     source_week: str,
     target_week: str,
     market: str | None = None,
-    temperature: float = 1.0,
 ) -> tuple[list[str], dict[str, str]]:
     """Build a ~100-track discovery mix.
 
@@ -66,7 +65,6 @@ def build_discovery_mix(
             current_top_artists,
             source_week=source_week,
             target_week=target_week,
-            temperature=temperature,
             max_queries=30,
         )
         for query in ai_queries:

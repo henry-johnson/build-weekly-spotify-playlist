@@ -11,8 +11,8 @@ from typing import Any
 from model_provider import AIProvider
 from config import (
     DEFAULT_USER_PROMPT_FILE,
-    OPENAI_TEXT_MODEL_SMALL,
-    OPENAI_TEMPERATURE_SMALL,
+    OPENAI_TEXT_MODEL_DESCRIPTION,
+    OPENAI_TEMPERATURE_DESCRIPTION,
     SPOTIFY_PLAYLIST_DESCRIPTION_MAX,
     read_file_if_exists,
 )
@@ -71,7 +71,6 @@ def _build_description_prompts(
 def generate_playlist_description(
     provider: AIProvider,
     top_tracks: list[dict[str, Any]],
-    temperature: float,
     *,
     source_week: str,
     target_week: str,
@@ -92,8 +91,8 @@ def generate_playlist_description(
         response = provider.generate_text(
             system_prompt,
             user_prompt,
-            model=OPENAI_TEXT_MODEL_SMALL,
-            temperature=OPENAI_TEMPERATURE_SMALL,
+            model=OPENAI_TEXT_MODEL_DESCRIPTION,
+            temperature=OPENAI_TEMPERATURE_DESCRIPTION,
         )
 
         raw_content = response["choices"][0]["message"]["content"]

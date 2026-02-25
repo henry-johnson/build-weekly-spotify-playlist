@@ -14,17 +14,15 @@ SPOTIFY_PLAYLIST_IMAGE_MAX_BYTES = 256 * 1024
 
 # ── OpenAI API ──────────────────────────────────────────────────
 OPENAI_API_BASE_URL = "https://api.openai.com/v1"
-OPENAI_TEXT_MODEL_SMALL = "gpt-5-nano"  # For lightweight tasks (description)
-OPENAI_TEXT_MODEL_LARGE = "gpt-5.2"  # For complex tasks (recommendations)
+OPENAI_TEXT_MODEL_DESCRIPTION = "gpt-5.2"  # For playlist descriptions
+OPENAI_TEXT_MODEL_RECOMMENDATIONS = "gpt-5.2"  # For music recommendations
 OPENAI_IMAGE_MODEL = "chatgpt-image-latest"
 OPENAI_IMAGE_SIZE = "1024"  # Size in pixels (will be formatted as 1024x1024)
 OPENAI_IMAGE_QUALITY = "auto"  # "low", "medium", "high", "auto"
 
-# Temperature settings per model
-# gpt-5-nano: only supports temperature=1 (no custom values)
-# gpt-5.2: supports 0.0-2.0
-OPENAI_TEMPERATURE_SMALL = 1.0  # gpt-5-nano default
-OPENAI_TEMPERATURE_LARGE = 0.8  # gpt-5.2 balanced
+# Temperature settings (gpt-5.2 supports 0.0-2.0)
+OPENAI_TEMPERATURE_DESCRIPTION = 1.2  # Higher = more creative/witty descriptions
+OPENAI_TEMPERATURE_RECOMMENDATIONS = 0.8  # Lower = more focused search queries
 
 # ── Prompt files ────────────────────────────────────────────────────
 DEFAULT_USER_PROMPT_FILE = "prompts/playlist_description_prompt.md"

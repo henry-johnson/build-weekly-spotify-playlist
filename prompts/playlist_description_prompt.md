@@ -44,6 +44,6 @@ Content constraints:
 Output format:
 
 Return strict JSON with a single key:
-{
+{{
 "description": "..."
-}
+}}

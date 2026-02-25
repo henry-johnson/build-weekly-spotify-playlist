@@ -15,8 +15,8 @@ from typing import Any
 from model_provider import AIProvider
 from config import (
     DEFAULT_RECOMMENDATIONS_PROMPT_FILE,
-    OPENAI_TEXT_MODEL_LARGE,
-    OPENAI_TEMPERATURE_LARGE,
+    OPENAI_TEXT_MODEL_RECOMMENDATIONS,
+    OPENAI_TEMPERATURE_RECOMMENDATIONS,
     read_file_if_exists,
 )
 
@@ -109,7 +109,6 @@ def ai_recommend_search_queries(
     *,
     source_week: str,
     target_week: str,
-    temperature: float = 1.0,
     max_queries: int = 15,
 ) -> list[str]:
     """Use an AI provider to generate Spotify search queries for music discovery.
@@ -124,14 +123,14 @@ def ai_recommend_search_queries(
         max_queries=max_queries,
     )
 
-    print(f"  AI recommendations: calling {OPENAI_TEXT_MODEL_LARGE}…", flush=True)
+    print(f"  AI recommendations: calling {OPENAI_TEXT_MODEL_RECOMMENDATIONS}…", flush=True)
 
     try:
         response = provider.generate_text(
             system_prompt,
             user_prompt,
-            model=OPENAI_TEXT_MODEL_LARGE,
-            temperature=OPENAI_TEMPERATURE_LARGE,
+            model=OPENAI_TEXT_MODEL_RECOMMENDATIONS,
+            temperature=OPENAI_TEMPERATURE_RECOMMENDATIONS,
         )
     except Exception as exc:
         print(

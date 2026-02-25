@@ -16,8 +16,8 @@ from model_provider_openai import OpenAIProvider
 from config import (
     OPENAI_API_BASE_URL,
     OPENAI_IMAGE_MODEL,
-    OPENAI_TEXT_MODEL_LARGE,
-    OPENAI_TEXT_MODEL_SMALL,
+    OPENAI_TEXT_MODEL_DESCRIPTION,
+    OPENAI_TEXT_MODEL_RECOMMENDATIONS,
     require_env,
 )
 from multi_user_config import load_users_from_env
@@ -91,8 +91,6 @@ def create_playlist_for_user(
     spotify_refresh_token: str,
     provider: OpenAIProvider,
     *,
-    model_temperature: float = 0.7,
-    recommendations_temperature: float = 1.0,
     artwork_enabled: bool = True,
     top_tracks_limit: int = 15,
     recommendation_limit: int = 30,
@@ -104,7 +102,7 @@ def create_playlist_for_user(
     
     # ── Authenticate ────────────────────────────────────────────────
     print("Authenticating with Spotify…", flush=True)
-    token, granted_scopes = spotify_access_token(
+    token, _granted_scopes = spotify_access_token(
         spotify_client_id, spotify_client_secret, spotify_refresh_token,
     )
     me = spotify_get_me(token)
@@ -127,8 +125,8 @@ def create_playlist_for_user(
     print(f"Search market: {search_market or 'none'}", flush=True)
     print(f"Target week: {target_week}", flush=True)
     print(f"Source week: {source_week}", flush=True)
-    print(f"Description model: {OPENAI_TEXT_MODEL_SMALL}", flush=True)
-    print(f"Recommendations model: {OPENAI_TEXT_MODEL_LARGE}", flush=True)
+    print(f"Description model: {OPENAI_TEXT_MODEL_DESCRIPTION}", flush=True)
+    print(f"Recommendations model: {OPENAI_TEXT_MODEL_RECOMMENDATIONS}", flush=True)
     print(
         f"Artwork: {'enabled' if artwork_enabled else 'disabled'}"
         f" (model: {OPENAI_IMAGE_MODEL})",
@@ -136,40 +134,29 @@ def create_playlist_for_user(
     )
 
     # ── Check for existing playlist ─────────────────────────────────
-    can_read_private = "playlist-read-private" in granted_scopes
-
     existing_playlist_id: str | None = None
-    if can_read_private:
-        try:
-            existing_target = spotify_find_playlist_by_name(
-                token,
-                target_week,
-                owner_id=user_id,
-            )
-        except urllib.error.HTTPError as err:
-            if err.code in (403, 429):
-                print(
-                    "Could not read existing playlists "
-                    f"({err.code}). Continuing without dedupe.",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                existing_target = None
-                can_read_private = False
-            else:
-                raise
-        if existing_target:
-            existing_playlist_id = str(existing_target.get("id") or "")
+    try:
+        existing_target = spotify_find_playlist_by_name(
+            token,
+            target_week,
+            owner_id=user_id,
+        )
+    except urllib.error.HTTPError as err:
+        if err.code in (403, 429):
             print(
-                f"Playlist {target_week} already exists "
-                f"({existing_playlist_id}). Will overwrite.",
+                "Could not read existing playlists "
+                f"({err.code}). Continuing without dedupe.",
+                file=sys.stderr,
                 flush=True,
             )
-    else:
+            existing_target = None
+        else:
+            raise
+    if existing_target:
+        existing_playlist_id = str(existing_target.get("id") or "")
         print(
-            "Skipping existing-playlist check "
-            "(missing playlist-read-private scope).",
-            file=sys.stderr,
+            f"Playlist {target_week} already exists "
+            f"({existing_playlist_id}). Will overwrite.",
             flush=True,
         )
 
@@ -190,57 +177,50 @@ def create_playlist_for_user(
     source_label = "current short-term listening"
     source_playlist_id: str | None = None
 
-    if can_read_private:
-        try:
-            previous_playlist = spotify_find_playlist_by_name(
-                token,
-                source_week,
-                owner_id=user_id,
+    try:
+        previous_playlist = spotify_find_playlist_by_name(
+            token,
+            source_week,
+            owner_id=user_id,
+        )
+    except urllib.error.HTTPError as err:
+        if err.code in (403, 429):
+            print(
+                f"Could not read previous playlists ({err.code}); "
+                "using short-term listening fallback.",
+                file=sys.stderr,
+                flush=True,
             )
-        except urllib.error.HTTPError as err:
-            if err.code in (403, 429):
-                print(
-                    f"Could not read previous playlists ({err.code}); "
-                    "using short-term listening fallback.",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                previous_playlist = None
-            else:
-                raise
-        if previous_playlist:
-            previous_tracks = spotify_get_playlist_tracks(
-                token,
-                previous_playlist["id"],
-                limit=max(100, recommendation_limit),
+            previous_playlist = None
+        else:
+            raise
+    if previous_playlist:
+        previous_tracks = spotify_get_playlist_tracks(
+            token,
+            previous_playlist["id"],
+            limit=max(100, recommendation_limit),
+        )
+        if len(previous_tracks) >= 5:
+            source_tracks = previous_tracks
+            source_artists = artists_from_tracks(previous_tracks, limit=10)
+            source_label = f"playlist {source_week}"
+            source_playlist_id = (
+                str(previous_playlist.get("id") or "") or None
             )
-            if len(previous_tracks) >= 5:
-                source_tracks = previous_tracks
-                source_artists = artists_from_tracks(previous_tracks, limit=10)
-                source_label = f"playlist {source_week}"
-                source_playlist_id = (
-                    str(previous_playlist.get("id") or "") or None
-                )
-                print(
-                    f"Using {len(previous_tracks)} tracks from {source_label}"
-                    f" as source data (id: {source_playlist_id or 'unknown'}).",
-                    flush=True,
-                )
-            else:
-                print(
-                    f"Found {source_label} but it has fewer than 5 tracks; "
-                    "using short-term listening fallback.",
-                    flush=True,
-                )
+            print(
+                f"Using {len(previous_tracks)} tracks from {source_label}"
+                f" as source data (id: {source_playlist_id or 'unknown'}).",
+                flush=True,
+            )
         else:
             print(
-                f"No playlist named {source_week} found; "
+                f"Found {source_label} but it has fewer than 5 tracks; "
                 "using short-term listening fallback.",
                 flush=True,
             )
     else:
         print(
-            "No previous-playlist lookup available; "
+            f"No playlist named {source_week} found; "
             "using short-term listening fallback.",
             flush=True,
         )
@@ -264,7 +244,6 @@ def create_playlist_for_user(
             source_week=source_week,
             target_week=target_week,
             market=search_market,
-            temperature=recommendations_temperature,
         )
     except Exception as err:
         print(
@@ -291,7 +270,6 @@ def create_playlist_for_user(
     playlist_description = generate_playlist_description(
         provider,
         source_tracks,
-        model_temperature,
         source_week=source_week,
         target_week=target_week,
         listener_first_name=profile_first_name,
@@ -370,67 +348,59 @@ def create_playlist_for_user(
         )
         sys.exit(1)
 
-    # ── Generate/upload playlist artwork (optional) ────────────────
+    # ── Generate/upload playlist artwork ──────────────────────────
     if artwork_enabled:
-        if "ugc-image-upload" not in granted_scopes:
-            print(
-                "Skipping artwork upload "
-                "(missing optional scope: ugc-image-upload).",
-                file=sys.stderr,
-                flush=True,
+        print("Generating playlist artwork with AI…", flush=True)
+        try:
+            artwork_b64 = generate_playlist_artwork_base64(
+                provider,
+                source_tracks,
+                source_artists,
+                source_week=source_week,
+                target_week=target_week,
+                playlist_name=playlist_name,
             )
-        else:
-            print("Generating playlist artwork with AI…", flush=True)
-            try:
-                artwork_b64 = generate_playlist_artwork_base64(
-                    provider,
-                    source_tracks,
-                    source_artists,
-                    source_week=source_week,
-                    target_week=target_week,
-                    playlist_name=playlist_name,
-                )
-                if artwork_b64:
-                    try:
-                        spotify_upload_playlist_cover_image(
-                            token,
-                            playlist_id,
-                            artwork_b64,
-                        )
-                        print("  Uploaded custom playlist artwork.", flush=True)
-                    except urllib.error.HTTPError as err:
-                        if err.code == 403:
-                            print(
-                                "  Artwork upload forbidden (403). "
-                                "Check ownership and ugc-image-upload scope.",
-                                file=sys.stderr,
-                                flush=True,
-                            )
-                        elif err.code == 429:
-                            print(
-                                "  Artwork upload rate limited (429). "
-                                "Skipping for now.",
-                                file=sys.stderr,
-                                flush=True,
-                            )
-                        else:
-                            print(
-                                f"  Artwork upload failed ({err}).",
-                                file=sys.stderr,
-                                flush=True,
-                            )
-                else:
-                    print(
-                        "  Artwork generation skipped or failed.",
-                        file=sys.stderr,
-                        flush=True,
+            if artwork_b64:
+                try:
+                    spotify_upload_playlist_cover_image(
+                        token,
+                        playlist_id,
+                        artwork_b64,
                     )
-            except Exception as err:
+                    print("  Uploaded custom playlist artwork.", flush=True)
+                except urllib.error.HTTPError as err:
+                    if err.code == 403:
+                        print(
+                            "  Artwork upload forbidden (403). "
+                            "Check ownership and ugc-image-upload scope.",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    elif err.code == 429:
+                        print(
+                            "  Artwork upload rate limited (429). "
+                            "Skipping for now.",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            f"  Artwork upload failed ({err}).",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+            else:
                 print(
-                    f"  ⚠ Artwork generation failed (rate limit?): {err}",
+                    "  Artwork generation skipped or failed.",
                     file=sys.stderr,
                     flush=True,
                 )
+        except Exception as err:
+            print(
+                f"  ⚠ Artwork generation failed (rate limit?): {err}",
+                file=sys.stderr,
+                flush=True,
+            )
 
     print(f"\n✓ Created playlist: {playlist_name}", flush=True)
     print(f"  Added tracks: {added_count}/{len(rec_uris)}", flush=True)
@@ -445,8 +415,6 @@ def main() -> None:
     # ── Global config ───────────────────────────────────────────────
     openai_api_key = require_env("OPENAI_API_KEY")
     
-    model_temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
-    recommendations_temperature = float(os.getenv("OPENAI_RECOMMENDATIONS_TEMPERATURE", "1.0"))
     artwork_enabled = os.getenv("ENABLE_PLAYLIST_ARTWORK", "1").strip().lower() not in {
         "0",
         "false",
@@ -482,8 +450,6 @@ def main() -> None:
                 spotify_client_secret=user.spotify_client_secret,
                 spotify_refresh_token=user.spotify_refresh_token,
                 provider=provider,
-                model_temperature=model_temperature,
-                recommendations_temperature=recommendations_temperature,
                 artwork_enabled=artwork_enabled,
                 top_tracks_limit=top_tracks_limit,
                 recommendation_limit=recommendation_limit,

@@ -2,90 +2,79 @@
 
 This script supports multiple Spotify users creating playlists simultaneously.
 
-## Option B: GitHub Secrets Per User (Recommended)
+## Architecture
 
-Each user's credentials are stored as separate GitHub repository secrets.
+- **Shared credentials**: One Spotify app (`SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET`) is shared across all users.
+- **Per-user refresh tokens**: Each user has their own `SPOTIFY_USER_REFRESH_TOKEN_{FIRST}_{LAST}` secret.
+- **Auto-discovery**: The script discovers all `SPOTIFY_USER_REFRESH_TOKEN_*` environment variables and creates a playlist for each.
 
-### Setup Instructions
+## Setup Instructions
 
-1. **Get Spotify Credentials for Each User**
-   - Each user needs their own:
-     - `SPOTIFY_CLIENT_ID`
-     - `SPOTIFY_CLIENT_SECRET`
-     - `SPOTIFY_REFRESH_TOKEN`
-   - [See Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+### 1. Create a Spotify App (once)
 
-2. **Add Secrets to GitHub Repository**
-   - Go to: Settings → Secrets and variables → Actions
-   - Click "New repository secret"
-   - For each user, add three secrets:
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Create an app with redirect URI `http://127.0.0.1:8888/callback`.
+3. Note the `Client ID` and `Client Secret`.
+4. Under **Settings → User Management**, add every user's Spotify email address.
 
-     **For user "henry":**
-     - Name: `SPOTIFY_USER_HENRY_CLIENT_ID`
-     - Value: `(henry's client ID)`
-     - Name: `SPOTIFY_USER_HENRY_CLIENT_SECRET`
-     - Value: `(henry's client secret)`
-     - Name: `SPOTIFY_USER_HENRY_REFRESH_TOKEN`
-     - Value: `(henry's refresh token)`
+### 2. Generate a Refresh Token (per user)
 
-     **For additional users** (repeat this pattern):
-     - Name: `SPOTIFY_USER_{USERNAME_UPPERCASE}_CLIENT_ID`
-     - Name: `SPOTIFY_USER_{USERNAME_UPPERCASE}_CLIENT_SECRET`
-     - Name: `SPOTIFY_USER_{USERNAME_UPPERCASE}_REFRESH_TOKEN`
+Each user must authorise with all 5 required scopes:
 
-3. **Add OpenAI Key**
-   - Name: `OPENAI_API_KEY`
-   - Value: `sk-...` (shared across all users)
+```text
+https://accounts.spotify.com/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback&scope=user-top-read%20playlist-modify-private%20playlist-modify-public%20playlist-read-private%20ugc-image-upload
+```
 
-4. **Update Workflow** (if usernames differ)
-   - Edit `.github/workflows/build-weekly-spotify-playlist.yml`
-   - Add/modify the `env:` section to match your usernames:
-     ```yaml
-     SPOTIFY_USER_HENRY_CLIENT_ID: ${{ secrets.SPOTIFY_USER_HENRY_CLIENT_ID }}
-     SPOTIFY_USER_HENRY_CLIENT_SECRET: ${{ secrets.SPOTIFY_USER_HENRY_CLIENT_SECRET }}
-     SPOTIFY_USER_HENRY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_USER_HENRY_REFRESH_TOKEN }}
-     # Add more users following the same pattern
-     ```
+Exchange the authorisation code for a refresh token:
+
+```bash
+curl -X POST https://accounts.spotify.com/api/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -u "$SPOTIFY_CLIENT_ID:$SPOTIFY_CLIENT_SECRET" \
+  -d grant_type=authorization_code \
+  -d code="AUTH_CODE_FROM_REDIRECT" \
+  -d redirect_uri="http://127.0.0.1:8888/callback"
+```
+
+### 3. Add GitHub Secrets
+
+Go to: **Settings → Secrets and variables → Actions → New repository secret**
+
+| Secret | Value |
+|--------|-------|
+| `OPENAI_API_KEY` | Your OpenAI API key (shared) |
+| `SPOTIFY_CLIENT_ID` | Spotify app client ID (shared) |
+| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret (shared) |
+| `SPOTIFY_USER_REFRESH_TOKEN_HENRY_JOHNSON` | Henry's refresh token |
+| `SPOTIFY_USER_REFRESH_TOKEN_PENNY_JOHNSON` | Penny's refresh token |
+
+> **Naming convention**: `SPOTIFY_USER_REFRESH_TOKEN_{FIRST}_{LAST}` — uppercase, underscores between names. The script converts this to a display name (e.g. `Henry Johnson`).
+
+### 4. Update Workflow
+
+Edit `.github/workflows/build-weekly-spotify-playlist.yml` to pass each user's secret as an env var:
+
+```yaml
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+  SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+  SPOTIFY_USER_REFRESH_TOKEN_HENRY_JOHNSON: ${{ secrets.SPOTIFY_USER_REFRESH_TOKEN_HENRY_JOHNSON }}
+  SPOTIFY_USER_REFRESH_TOKEN_PENNY_JOHNSON: ${{ secrets.SPOTIFY_USER_REFRESH_TOKEN_PENNY_JOHNSON }}
+```
 
 ### How It Works
 
-- Workflow runs Monday at **3 AM UTC**
-- Script discovers all `SPOTIFY_USER_*` environment variables
-- For each unique username found, creates a weekly playlist
-- Playlist name: "Weekly Discovery — {YYYY-WW}"
-- Each user gets their own independent playlists
-
-### Example Output
-
-```
-Found 1 user(s): henry
-
-============================================================
-Creating playlist for: henry
-============================================================
-Authenticating with Spotify…
-Fetching listening data…
-Building discovery track mix…
-Generating playlist description with AI…
-Generating playlist artwork with AI…
-✓ Playlist created: Weekly Discovery — 2026-08
-✓ All checks passed! Ready to deploy.
-```
+- The workflow runs every Monday at **3 AM UTC**.
+- `multi_user_config.py` scans for all `SPOTIFY_USER_REFRESH_TOKEN_*` env vars.
+- For each user found, it creates (or overwrites) that week's playlist independently.
+- If one user fails (e.g. expired token), the script continues with the remaining users.
 
 ### Troubleshooting
 
-**Missing users or credentials warning:**
-
-- Check that all three secrets are present for each user
-- Secret names must match pattern: `SPOTIFY_USER_{USERNAME}_*`
-- Username is extracted from the secret name (uppercase part after `SPOTIFY_USER_`)
-
-**Workflow not running:**
-
-- Verify `OPENAI_API_KEY` secret exists
-- Check workflow is enabled: Settings → Actions → General
-
-**No playlists created:**
-
-- Check GitHub Actions logs for error details
-- Ensure Spotify refresh tokens are still valid
+| Problem | Solution |
+|---------|----------|
+| 403 on `GET /v1/me` | Add the user's Spotify email to User Management in the developer dashboard |
+| Missing required scopes | Regenerate the refresh token with all 5 scopes |
+| User not found | Check the env var name matches `SPOTIFY_USER_REFRESH_TOKEN_{FIRST}_{LAST}` exactly |
+| Workflow not running | Verify all secrets exist and the workflow is enabled under Actions settings |

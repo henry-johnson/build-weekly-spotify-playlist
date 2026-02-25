@@ -22,10 +22,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from model_provider_openai import OpenAIProvider
 from config import (
-    OPENAI_TEXT_MODEL_SMALL,
-    OPENAI_TEXT_MODEL_LARGE,
-    OPENAI_TEMPERATURE_SMALL,
-    OPENAI_TEMPERATURE_LARGE,
+    OPENAI_TEXT_MODEL_DESCRIPTION,
+    OPENAI_TEXT_MODEL_RECOMMENDATIONS,
 )
 from metadata import generate_playlist_description, assemble_final_description
 from recommendations import ai_recommend_search_queries
@@ -165,7 +163,7 @@ def _get_provider() -> OpenAIProvider | None:
     return OpenAIProvider(api_key=api_key)
 
 
-def test_text_generation_small():
+def test_text_generation_description():
     """Test description generation via the real metadata pipeline."""
     provider = _get_provider()
     if not provider:
@@ -175,16 +173,15 @@ def test_text_generation_small():
         description = generate_playlist_description(
             provider=provider,
             top_tracks=DEMO_TOP_TRACKS,
-            temperature=OPENAI_TEMPERATURE_SMALL,
             source_week=SOURCE_WEEK,
             target_week=TARGET_WEEK,
             listener_first_name="Henry",
         )
         final = assemble_final_description(description)
-        print(f"✅ Description ({OPENAI_TEXT_MODEL_SMALL}): {final[:120]}...")
+        print(f"✅ Description ({OPENAI_TEXT_MODEL_DESCRIPTION}): {final[:120]}...")
         output_path = Path(__file__).parent / f"generated_description_{TIMESTAMP}.txt"
         output_path.write_text(
-            f"Model: {OPENAI_TEXT_MODEL_SMALL}\n"
+            f"Model: {OPENAI_TEXT_MODEL_DESCRIPTION}\n"
             f"Source: {SOURCE_WEEK}  Target: {TARGET_WEEK}\n"
             f"Length: {len(final)} chars\n\n"
             f"{final}\n"
@@ -197,7 +194,7 @@ def test_text_generation_small():
         return False
 
 
-def test_text_generation_large():
+def test_text_generation_recommendations():
     """Test recommendations via the real discovery pipeline."""
     provider = _get_provider()
     if not provider:
@@ -210,15 +207,14 @@ def test_text_generation_large():
             top_artists=DEMO_TOP_ARTISTS,
             source_week=SOURCE_WEEK,
             target_week=TARGET_WEEK,
-            temperature=OPENAI_TEMPERATURE_LARGE,
             max_queries=15,
         )
-        print(f"✅ Recommendations ({OPENAI_TEXT_MODEL_LARGE}): {len(queries)} queries")
+        print(f"✅ Recommendations ({OPENAI_TEXT_MODEL_RECOMMENDATIONS}): {len(queries)} queries")
         for q in queries[:3]:
             print(f"   • {q}")
         output_path = Path(__file__).parent / f"generated_recommendations_{TIMESTAMP}.txt"
         output_path.write_text(
-            f"Model: {OPENAI_TEXT_MODEL_LARGE}\n"
+            f"Model: {OPENAI_TEXT_MODEL_RECOMMENDATIONS}\n"
             f"Source: {SOURCE_WEEK}  Target: {TARGET_WEEK}\n\n"
             + "\n".join(queries) + "\n"
         )
@@ -312,8 +308,8 @@ if __name__ == "__main__":
     print("Testing OpenAI Provider...\n")
 
     results = [
-        ("Description", test_text_generation_small()),
-        ("Recommendations", test_text_generation_large()),
+        ("Description", test_text_generation_description()),
+        ("Recommendations", test_text_generation_recommendations()),
         (f"Image ({TARGET_WEEK})", test_image_generation()),
     ]
     if not single:
