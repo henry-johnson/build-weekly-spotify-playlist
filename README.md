@@ -103,25 +103,25 @@ Prompt customization:
 
 ### Scripts (modular)
 
-| File                                | Purpose                                                                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `scripts/create_weekly_playlist.py` | Thin orchestrator — wires modules together and runs the end-to-end flow.                                                 |
-| `scripts/config.py`                 | Shared constants (API base URLs, defaults) and environment helpers.                                                      |
-| `scripts/http_client.py`            | `http_json()` — stdlib HTTP client with automatic retry on 429 / 5xx.                                                    |
-| `scripts/spotify_auth.py`           | Spotify OAuth token refresh and scope validation.                                                                        |
-| `scripts/spotify_api.py`            | All Spotify Web API helpers (profile, top items, search, playlist CRUD).                                                 |
-| `scripts/metadata.py`               | AI playlist description generation via OpenAI (`gpt-5-nano`).                                                           |
-| `scripts/recommendations.py`        | AI recommendation engine — sends listening data to `gpt-5.2` and gets back Spotify search queries for music discovery.  |
-| `scripts/artwork.py`                | AI playlist artwork generation (OpenAI image model) with Pillow text overlay and Spotify upload payload handling.        |
-| `scripts/discovery.py`              | Track mix builder: combines AI recommendations, familiar anchors, and genre/artist search into a ~100-track playlist.   |
+| File                                | Purpose                                                                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `scripts/create_weekly_playlist.py` | Thin orchestrator — wires modules together and runs the end-to-end flow.                                               |
+| `scripts/config.py`                 | Shared constants (API base URLs, defaults) and environment helpers.                                                    |
+| `scripts/http_client.py`            | `http_json()` — stdlib HTTP client with automatic retry on 429 / 5xx.                                                  |
+| `scripts/spotify_auth.py`           | Spotify OAuth token refresh and scope validation.                                                                      |
+| `scripts/spotify_api.py`            | All Spotify Web API helpers (profile, top items, search, playlist CRUD).                                               |
+| `scripts/metadata.py`               | AI playlist description generation via OpenAI (`gpt-5-nano`).                                                          |
+| `scripts/recommendations.py`        | AI recommendation engine — sends listening data to `gpt-5.2` and gets back Spotify search queries for music discovery. |
+| `scripts/artwork.py`                | AI playlist artwork generation (OpenAI image model) with Pillow text overlay and Spotify upload payload handling.      |
+| `scripts/discovery.py`              | Track mix builder: combines AI recommendations, familiar anchors, and genre/artist search into a ~100-track playlist.  |
 
 ### Prompts
 
-| File                                     | Placeholders                                                                                   | Used by                                     |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `prompts/playlist_description_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `metadata.py` — playlist descriptions       |
-| `prompts/recommendations_prompt.md`      | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `recommendations.py` — discovery queries    |
-| `prompts/playlist_artwork_prompt.md`     | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `artwork.py` — playlist cover generation    |
+| File                                     | Placeholders                                                                                   | Used by                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `prompts/playlist_description_prompt.md` | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `metadata.py` — playlist descriptions    |
+| `prompts/recommendations_prompt.md`      | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`, `{genres}`, `{max_queries}` | `recommendations.py` — discovery queries |
+| `prompts/playlist_artwork_prompt.md`     | `{source_week}`, `{target_week}`, `{top_artists}`, `{top_tracks}`                              | `artwork.py` — playlist cover generation |
 
 ## How the AI recommendation engine works
 
