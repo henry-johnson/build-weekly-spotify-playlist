@@ -11,7 +11,11 @@ from unittest.mock import patch, MagicMock
 # Add scripts to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from spotify_api import spotify_track_primary_artist_by_uri
+from spotify_api import (
+    primary_artist_map_from_tracks,
+    spotify_search_tracks_with_artists,
+    spotify_track_primary_artist_by_uri,
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -20,6 +24,7 @@ from spotify_api import spotify_track_primary_artist_by_uri
 def _make_track(track_id: str, artist_id: str, artist_name: str) -> dict:
     return {
         "id": track_id,
+        "uri": f"spotify:track:{track_id}",
         "artists": [{"id": artist_id, "name": artist_name}],
     }
 
@@ -202,6 +207,81 @@ class TestSpreadTracksByArtist(unittest.TestCase):
                 artist_map.get(result[i + 1]),
                 f"Adjacent same artist at index {i}: {result}",
             )
+
+
+class TestPrimaryArtistMapFromTracks(unittest.TestCase):
+    """Tests for primary_artist_map_from_tracks."""
+
+    def test_basic_mapping(self) -> None:
+        tracks = [
+            _make_track("AAA", "a1", "Artist One"),
+            _make_track("BBB", "a2", "Artist Two"),
+        ]
+        result = primary_artist_map_from_tracks(tracks)
+        self.assertEqual(result["spotify:track:AAA"], "a1")
+        self.assertEqual(result["spotify:track:BBB"], "a2")
+
+    def test_empty_list(self) -> None:
+        self.assertEqual(primary_artist_map_from_tracks([]), {})
+
+    def test_missing_uri(self) -> None:
+        tracks = [{"id": "X", "artists": [{"id": "a", "name": "A"}]}]
+        self.assertEqual(primary_artist_map_from_tracks(tracks), {})
+
+    def test_no_artists_fallback(self) -> None:
+        tracks = [{"uri": "spotify:track:X", "id": "X", "artists": []}]
+        # No artist → should not be in the map
+        self.assertEqual(primary_artist_map_from_tracks(tracks), {})
+
+    def test_deduplicates(self) -> None:
+        t = _make_track("AAA", "a1", "Artist One")
+        result = primary_artist_map_from_tracks([t, t, t])
+        self.assertEqual(len(result), 1)
+
+    def test_name_fallback_when_no_id(self) -> None:
+        tracks = [{"uri": "spotify:track:X", "id": "X",
+                    "artists": [{"name": "Fallback Name"}]}]
+        result = primary_artist_map_from_tracks(tracks)
+        self.assertEqual(result["spotify:track:X"], "Fallback Name")
+
+
+class TestSearchTracksWithArtists(unittest.TestCase):
+    """Tests for spotify_search_tracks_with_artists."""
+
+    @patch("spotify_api.http_json")
+    def test_returns_uris_and_artist_map(self, mock_http: MagicMock) -> None:
+        items = [
+            _make_track("AAA", "a1", "Artist One"),
+            _make_track("BBB", "a2", "Artist Two"),
+        ]
+        mock_http.return_value = {"tracks": {"items": items}}
+
+        uris, artist_map = spotify_search_tracks_with_artists(
+            "fake-token", 'artist:"Test"',
+        )
+
+        self.assertEqual(len(uris), 2)
+        self.assertIn("spotify:track:AAA", uris)
+        self.assertEqual(artist_map["spotify:track:AAA"], "a1")
+        self.assertEqual(artist_map["spotify:track:BBB"], "a2")
+
+    @patch("spotify_api.http_json")
+    def test_empty_results(self, mock_http: MagicMock) -> None:
+        mock_http.return_value = {"tracks": {"items": []}}
+        uris, artist_map = spotify_search_tracks_with_artists(
+            "fake-token", "nothing",
+        )
+        self.assertEqual(uris, [])
+        self.assertEqual(artist_map, {})
+
+    @patch("spotify_api.http_json")
+    def test_api_error_returns_empty(self, mock_http: MagicMock) -> None:
+        mock_http.side_effect = Exception("timeout")
+        uris, artist_map = spotify_search_tracks_with_artists(
+            "fake-token", "broken",
+        )
+        self.assertEqual(uris, [])
+        self.assertEqual(artist_map, {})
 
 
 if __name__ == "__main__":

@@ -407,6 +407,29 @@ def spotify_add_tracks(
 # ── Search ──────────────────────────────────────────────────────────
 
 
+def _primary_artist_id(track: dict[str, Any]) -> str:
+    """Extract the primary artist ID (or name fallback) from a track object."""
+    artists = track.get("artists") or []
+    if not artists:
+        return ""
+    first = artists[0] or {}
+    return str(first.get("id") or first.get("name") or "").strip()
+
+
+def primary_artist_map_from_tracks(
+    tracks: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Build a URI -> primary-artist-ID map from track objects."""
+    result: dict[str, str] = {}
+    for track in tracks:
+        uri = track.get("uri")
+        if uri and uri not in result:
+            artist = _primary_artist_id(track)
+            if artist:
+                result[uri] = artist
+    return result
+
+
 def spotify_search_tracks(
     token: str,
     query: str,
@@ -414,6 +437,22 @@ def spotify_search_tracks(
     market: str | None = None,
 ) -> list[str]:
     """Search Spotify for tracks. Returns a list of track URIs."""
+    uris, _ = spotify_search_tracks_with_artists(
+        token, query, limit=limit, market=market,
+    )
+    return uris
+
+
+def spotify_search_tracks_with_artists(
+    token: str,
+    query: str,
+    limit: int = 10,
+    market: str | None = None,
+) -> tuple[list[str], dict[str, str]]:
+    """Search Spotify for tracks.
+
+    Returns (uris, artist_map) where artist_map is URI -> primary artist ID.
+    """
     query_params: dict[str, str] = {
         "q": query,
         "type": "track",
@@ -429,16 +468,14 @@ def spotify_search_tracks(
             f"{SPOTIFY_API_BASE}/search?{params}",
             headers={"Authorization": f"Bearer {token}"},
         )
-        uris = [
-            t["uri"]
-            for t in payload.get("tracks", {}).get("items", [])
-            if t.get("uri")
-        ]
+        items = payload.get("tracks", {}).get("items", [])
+        uris = [t["uri"] for t in items if t.get("uri")]
+        artist_map = primary_artist_map_from_tracks(items)
         print(f"  Search '{query}': {len(uris)} tracks", flush=True)
-        return uris
+        return uris, artist_map
     except Exception as exc:
         print(f"  Search '{query}' failed: {exc}", file=sys.stderr)
-        return []
+        return [], {}
 
 
 # ── Track helpers ───────────────────────────────────────────────────

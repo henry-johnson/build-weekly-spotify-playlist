@@ -8,7 +8,10 @@ from typing import Any
 
 from model_provider import AIProvider
 from recommendations import ai_recommend_search_queries
-from spotify_api import spotify_search_tracks
+from spotify_api import (
+    primary_artist_map_from_tracks,
+    spotify_search_tracks_with_artists,
+)
 
 
 def build_discovery_mix(
@@ -22,7 +25,7 @@ def build_discovery_mix(
     target_week: str,
     market: str | None = None,
     temperature: float = 1.0,
-) -> list[str]:
+) -> tuple[list[str], dict[str, str]]:
     """Build a ~100-track discovery mix.
 
     Slot 1 — AI-recommended tracks (target 50):
@@ -40,6 +43,7 @@ def build_discovery_mix(
     known_uris: set[str] = {t["uri"] for t in source_tracks if t.get("uri")}
     discovered: list[str] = []
     discovered_set: set[str] = set()
+    artist_map: dict[str, str] = primary_artist_map_from_tracks(source_tracks)
 
     def add(uri: str, cap: int) -> bool:
         if (
@@ -69,9 +73,11 @@ def build_discovery_mix(
             if len(discovered) >= 50:
                 break
             try:
-                for uri in spotify_search_tracks(
+                uris, search_artists = spotify_search_tracks_with_artists(
                     spotify_token, query, limit=10, market=market,
-                ):
+                )
+                artist_map.update(search_artists)
+                for uri in uris:
                     add(uri, 50)
             except Exception as err:
                 print(
@@ -123,9 +129,11 @@ def build_discovery_mix(
             if len(discovered) >= 100:
                 break
             try:
-                for uri in spotify_search_tracks(
+                uris, search_artists = spotify_search_tracks_with_artists(
                     spotify_token, query, limit=10, market=market,
-                ):
+                )
+                artist_map.update(search_artists)
+                for uri in uris:
                     add(uri, 100)
             except Exception as err:
                 print(
@@ -147,4 +155,4 @@ def build_discovery_mix(
         f"(ai={ai_count}, anchors={anchor_count}, search={search_count})",
         flush=True,
     )
-    return discovered
+    return discovered, artist_map

@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependencies
+        run: pip install Pillow
+
       - name: Create weekly playlists for all users
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

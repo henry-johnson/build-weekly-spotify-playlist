@@ -32,7 +32,6 @@ from spotify_api import (
     spotify_find_playlist_by_name,
     spotify_get_me,
     spotify_get_playlist_tracks,
-    spotify_track_primary_artist_by_uri,
     spotify_get_top_artists,
     spotify_get_top_tracks,
     spotify_upload_playlist_cover_image,
@@ -254,8 +253,9 @@ def create_playlist_for_user(
 
     # ── Build discovery mix ─────────────────────────────────────────
     print("Building discovery track mix…", flush=True)
+    primary_artist_by_uri: dict[str, str] = {}
     try:
-        rec_uris = build_discovery_mix(
+        rec_uris, primary_artist_by_uri = build_discovery_mix(
             spotify_token=token,
             provider=provider,
             source_tracks=source_tracks,
@@ -342,18 +342,6 @@ def create_playlist_for_user(
             unique_uris.append(uri)
     rec_uris = unique_uris[:100]
 
-    try:
-        primary_artist_by_uri = spotify_track_primary_artist_by_uri(
-            token, rec_uris, market=search_market,
-        )
-    except urllib.error.HTTPError as err:
-        print(
-            f"Track artist lookup failed ({err.code}); "
-            "skipping artist-spread reordering.",
-            file=sys.stderr,
-            flush=True,
-        )
-        primary_artist_by_uri = {}
     if primary_artist_by_uri:
         rec_uris = _spread_tracks_by_artist(rec_uris, primary_artist_by_uri)
 
