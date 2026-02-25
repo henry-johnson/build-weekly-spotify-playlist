@@ -15,6 +15,8 @@ from collections import deque
 from model_provider_openai import OpenAIProvider
 from config import (
     OPENAI_API_BASE_URL,
+    OPENAI_IMAGE_MODEL,
+    OPENAI_TEXT_MODEL_LARGE,
     OPENAI_TEXT_MODEL_SMALL,
     require_env,
 )
@@ -126,11 +128,11 @@ def create_playlist_for_user(
     print(f"Search market: {search_market or 'none'}", flush=True)
     print(f"Target week: {target_week}", flush=True)
     print(f"Source week: {source_week}", flush=True)
-    print(f"Description model: {model_name}", flush=True)
-    print(f"Recommendations model: {recommendations_model}", flush=True)
+    print(f"Description model: {OPENAI_TEXT_MODEL_SMALL}", flush=True)
+    print(f"Recommendations model: {OPENAI_TEXT_MODEL_LARGE}", flush=True)
     print(
         f"Artwork: {'enabled' if artwork_enabled else 'disabled'}"
-        f" (model: {artwork_model})",
+        f" (model: {OPENAI_IMAGE_MODEL})",
         flush=True,
     )
 
