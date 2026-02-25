@@ -124,6 +124,8 @@ def spotify_get_playlist_tracks(
 def spotify_track_primary_artist_by_uri(
     token: str,
     uris: list[str],
+    *,
+    market: str | None = None,
 ) -> dict[str, str]:
     """Return a map of track URI -> primary artist ID (or name fallback)."""
     uri_to_track_id: dict[str, str] = {}
@@ -142,7 +144,10 @@ def spotify_track_primary_artist_by_uri(
 
     for i in range(0, len(track_ids), 50):
         batch_ids = track_ids[i : i + 50]
-        params = urllib.parse.urlencode({"ids": ",".join(batch_ids)})
+        query: dict[str, str] = {"ids": ",".join(batch_ids)}
+        if market:
+            query["market"] = market
+        params = urllib.parse.urlencode(query)
         payload = http_json(
             "GET",
             f"{SPOTIFY_API_BASE}/tracks?{params}",

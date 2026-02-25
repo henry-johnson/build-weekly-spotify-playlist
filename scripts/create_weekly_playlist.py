@@ -342,7 +342,18 @@ def create_playlist_for_user(
             unique_uris.append(uri)
     rec_uris = unique_uris[:100]
 
-    primary_artist_by_uri = spotify_track_primary_artist_by_uri(token, rec_uris)
+    try:
+        primary_artist_by_uri = spotify_track_primary_artist_by_uri(
+            token, rec_uris, market=search_market,
+        )
+    except urllib.error.HTTPError as err:
+        print(
+            f"Track artist lookup failed ({err.code}); "
+            "skipping artist-spread reordering.",
+            file=sys.stderr,
+            flush=True,
+        )
+        primary_artist_by_uri = {}
     if primary_artist_by_uri:
         rec_uris = _spread_tracks_by_artist(rec_uris, primary_artist_by_uri)
 
